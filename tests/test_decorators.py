@@ -1,6 +1,7 @@
 import pytest
-from odinweb_core import decorators
-from odinweb_core import constants
+
+from odinweb import decorators
+from odinweb import constants
 
 
 @pytest.mark.parametrize('decorator,definition'.split(','), (
