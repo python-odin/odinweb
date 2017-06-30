@@ -75,4 +75,3 @@ class Error(odin.Resource):
         null=True,
         help_text="Additional meta information that can help solve errors."
     )
-

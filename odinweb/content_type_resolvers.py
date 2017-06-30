@@ -28,6 +28,13 @@ def content_type_header():
     return inner
 
 
+class DefaultString(str):
+    """
+    Wrapper around a string to mark it as a default string.
+    """
+    is_default = True
+
+
 def specific_default(content_type):
     """
     Specify a specific default content type.
@@ -36,6 +43,6 @@ def specific_default(content_type):
 
     """
     def inner(_):
-        return content_type
+        return DefaultString(content_type)
     return inner
 

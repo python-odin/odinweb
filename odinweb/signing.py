@@ -1,7 +1,13 @@
 # -*- coding: utf-8 -*-
+"""
+Signing
+~~~~~~~
+
+Implementation of URL signing. 
+
+"""
 import hashlib
 import hmac
-import string
 import time
 
 try:
@@ -12,9 +18,7 @@ except ImportError:
     from urllib2 import URLError
     from urlparse import parse_qs, urlparse
 
-from .utils import RandomString
-
-random_string = RandomString(default_length=8, chars=string.ascii_lowercase + string.digits)
+from .utils import random_string
 
 DEFAULT_DIGEST = hashlib.sha256
 

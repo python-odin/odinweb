@@ -9,11 +9,12 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='odinweb.core',
+    name='odinweb',
+    namespace_packages=['odinweb'],
     version='0.1',
     description="Toolkit for building web API's using Odin",
     long_description=long_description,
-    url='https://github.com/python-odin/odinweb.core',
+    url='https://github.com/python-odin/odinweb',
     author='Tim Savage',
     author_email='tim@savage.company',
     license='BSD',
@@ -40,7 +41,7 @@ setup(
 
     keywords='odin web rest api',
 
-    packages=find_packages(include=('odinweb_core',)),
+    packages=find_packages(include=('odinweb',)),
 
-    install_requires=['odin>=0.10', 'six'],
+    install_requires=['odin>=1.0'],
 )
