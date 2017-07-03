@@ -103,10 +103,14 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
     """
 
     registered_codecs = CODECS
-    url_prefix = r''
+    """
+    Codecs that are supported by this API.
+    """
 
-    debug_enabled = False
     respond_to_options = True
+    """
+    Respond to an options request.
+    """
 
     def __init__(self, api_name=None):
         if api_name:
@@ -257,45 +261,45 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
             return status, response_codec.dumps(resource)
 
 
-class ApiCollection(object):
-    """
-    A collection of several resource APIs
-    """
-    def __init__(self, *resource_apis, **kwargs):
-        self.api_name = kwargs.pop('api_name', 'api')
-        self.resource_apis = resource_apis
-
-    def api_rules(self):
-        pass
-
-
-class ApiVersion(ApiCollection):
-    """
-    A versioned collection of resource APIs
-    """
-    def __init__(self, *resource_apis, **kwargs):
-        kwargs.setdefault('api_name', kwargs.pop('version', 'v1'))
-        super(ApiVersion, self).__init__(*resource_apis, **kwargs)
-
-
-class Api(object):
-    """
-    An API made up of several API versions.
-
-    >>> api = Api(
-    ...     ApiVersion(
-    ...         UserApi(),
-    ...         MyApi()
-    ...     )
-    ... )
-
-    """
-    def __init__(self, *versions, **kwargs):
-        self.versions = versions
-        self.api_name = kwargs.pop('api_name', 'api')
-
-    def get_routes(self):
-        """
-        Get a list of routes defined by the API.
-        """
-        routes = []
+# class ApiCollection(object):
+#     """
+#     A collection of several resource APIs
+#     """
+#     def __init__(self, *resource_apis, **kwargs):
+#         self.api_name = kwargs.pop('api_name', 'api')
+#         self.resource_apis = resource_apis
+#
+#     def api_rules(self):
+#         pass
+#
+#
+# class ApiVersion(ApiCollection):
+#     """
+#     A versioned collection of resource APIs
+#     """
+#     def __init__(self, *resource_apis, **kwargs):
+#         kwargs.setdefault('api_name', kwargs.pop('version', 'v1'))
+#         super(ApiVersion, self).__init__(*resource_apis, **kwargs)
+#
+#
+# class Api(object):
+#     """
+#     An API made up of several API versions.
+#
+#     >>> api = Api(
+#     ...     ApiVersion(
+#     ...         UserApi(),
+#     ...         MyApi()
+#     ...     )
+#     ... )
+#
+#     """
+#     def __init__(self, *versions, **kwargs):
+#         self.versions = versions
+#         self.api_name = kwargs.pop('api_name', 'api')
+#
+#     def get_routes(self):
+#         """
+#         Get a list of routes defined by the API.
+#         """
+#         routes = []
