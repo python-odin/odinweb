@@ -8,8 +8,6 @@ Like odin this library will support Python 2.7 through to version 2.0.
 From this point onwards Python 3.5+ will be required.
 
 """
-from __future__ import unicode_literals
-
 import sys
 
 __all__ = (
