@@ -3,9 +3,8 @@
 Py27 Support
 ~~~~~~~~~~~~
 
-Like odin this library will support Python 2.7 through to version 2.0.
-
-From this point onwards Python 3.5+ will be required.
+Like odin this library will support Python 2.7 through to a 2.0 release. From
+this point onwards Python 3.5+ will be required.
 
 """
 import sys
