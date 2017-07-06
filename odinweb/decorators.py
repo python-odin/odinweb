@@ -26,11 +26,11 @@ __all__ = (
 # Counter used to order routes
 _route_count = 0
 
+# Definition of a route bound to a class method
+RouteDefinition = namedtuple("RouteDefinition", ('route_number', 'path_type', 'methods', 'sub_path', 'callback'))
 
-RouteDefinition = namedtuple("RouteDefinition", ('route_number', 'path_type', 'methods', 'name'))
 
-
-def route(func=None, name=None, path_type=constants.PATH_TYPE_COLLECTION, methods=constants.GET, resource=None):
+def route(func=None, path_type=constants.PATH_TYPE_COLLECTION, methods=constants.GET, resource=None, sub_path=None):
     """
     Decorator for defining an API route. Usually one of the helpers (listing, detail, update, delete) would be
     used in place of the route decorator.
@@ -46,7 +46,7 @@ def route(func=None, name=None, path_type=constants.PATH_TYPE_COLLECTION, method
                 return items
 
     :param func: Function we are routing
-    :param name: Action name
+    :param sub_path: A sub path that can be used as a action.
     :param path_type: Type of path, list/detail or custom.
     :param methods: HTTP method(s) this function responses to.
     :type methods: str | tuple(str) | list(str)
@@ -62,8 +62,15 @@ def route(func=None, name=None, path_type=constants.PATH_TYPE_COLLECTION, method
     route_number = _route_count
     _route_count += 1
 
+    if sub_path:
+        # If we have a sub path normalise it into a tuple.
+        if isinstance(sub_path, _compat.string_types):
+            sub_path = (sub_path,)
+        elif not isinstance(sub_path, (list, tuple)):
+            sub_path = tuple(sub_path,)
+
     def inner(f):
-        f.route = RouteDefinition(route_number, path_type, methods, name)
+        f.route = RouteDefinition(route_number, path_type, methods, sub_path, f)
         f.resource = resource
         return f
 
@@ -72,8 +79,8 @@ def route(func=None, name=None, path_type=constants.PATH_TYPE_COLLECTION, method
 collection = collection_action = action = route
 
 
-def resource_route(func=None, name=None, method=constants.GET, resource=None):
-    return route(func, name, constants.PATH_TYPE_RESOURCE, method, resource)
+def resource_route(func=None, method=constants.GET, resource=None, sub_path=None):
+    return route(func, constants.PATH_TYPE_RESOURCE, method, resource, sub_path)
 
 resource_action = resource_route
 
@@ -105,14 +112,13 @@ def list_response(func=None, default_offset=0, default_limit=50):
     return inner(func) if func else inner
 
 
-# Shortcut method
+# Shortcut methods
 
-def listing(func=None, name=None, resource=None, default_offset=0, default_limit=50):
+def listing(func=None, resource=None, default_offset=0, default_limit=50):
     """
     Decorator to indicate a listing endpoint.
 
     :param func: Function we are routing
-    :param name: Action name
     :param resource: Specify the resource that this function
         encodes/decodes, default is the one specified on the ResourceAPI
         instance.
@@ -120,75 +126,72 @@ def listing(func=None, name=None, resource=None, default_offset=0, default_limit
     :param default_limit: Default value for limiting the response size.
 
     """
-    return route(list_response(func, default_offset, default_limit),
-                 name, constants.PATH_TYPE_COLLECTION, constants.GET, resource)
+    return route(
+        list_response(func, default_offset, default_limit),
+        constants.PATH_TYPE_COLLECTION, constants.GET, resource
+    )
 
 
-def create(func=None, name=None, resource=None):
+def create(func=None, resource=None):
     """
     Decorator to indicate a creation endpoint.
 
     :param func: Function we are routing
-    :param name: Action name
     :param resource: Specify the resource that this function
         encodes/decodes, default is the one specified on the ResourceAPI
         instance.
 
     """
-    return route(func, name, constants.PATH_TYPE_COLLECTION, constants.POST, resource)
+    return route(func, constants.PATH_TYPE_COLLECTION, constants.POST, resource)
 
 
-def detail(func=None, name=None, resource=None):
+def detail(func=None, resource=None):
     """
     Decorator to indicate a detail endpoint.
 
     :param func: Function we are routing
-    :param name: Action name
     :param resource: Specify the resource that this function
         encodes/decodes, default is the one specified on the ResourceAPI
         instance.
 
     """
-    return route(func, name, constants.PATH_TYPE_RESOURCE, constants.GET, resource)
+    return route(func, constants.PATH_TYPE_RESOURCE, constants.GET, resource)
 
 
-def update(func=None, name=None, resource=None):
+def update(func=None, resource=None):
     """
     Decorator to indicate an update endpoint.
 
     :param func: Function we are routing
-    :param name: Action name
     :param resource: Specify the resource that this function
         encodes/decodes, default is the one specified on the ResourceAPI
         instance.
 
     """
-    return route(func, name, constants.PATH_TYPE_RESOURCE, constants.PUT, resource)
+    return route(func, constants.PATH_TYPE_RESOURCE, constants.PUT, resource)
 
 
-def patch(func=None, name=None, resource=None):
+def patch(func=None, resource=None):
     """
     Decorator to indicate a patch endpoint.
 
     :param func: Function we are routing
-    :param name: Action name
     :param resource: Specify the resource that this function
         encodes/decodes, default is the one specified on the ResourceAPI
         instance.
 
     """
-    return route(func, name, constants.PATH_TYPE_RESOURCE, constants.PATCH, resource)
+    return route(func, constants.PATH_TYPE_RESOURCE, constants.PATCH, resource)
 
 
-def delete(func=None, name=None, resource=None):
+def delete(func=None, resource=None):
     """
     Decorator to indicate a deletion endpoint.
 
     :param func: Function we are routing
-    :param name: Action name
     :param resource: Specify the resource that this function
         encodes/decodes, default is the one specified on the ResourceAPI
         instance.
 
     """
-    return route(func, name, constants.PATH_TYPE_RESOURCE, constants.DELETE, resource)
+    return route(func, constants.PATH_TYPE_RESOURCE, constants.DELETE, resource)
