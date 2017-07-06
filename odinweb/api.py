@@ -8,15 +8,20 @@ from __future__ import absolute_import, unicode_literals
 import logging
 import sys
 
-from collections import namedtuple, OrderedDict
+from collections import OrderedDict
+from itertools import chain
+
 from odin.codecs import json_codec
 from odin.exceptions import ValidationError, CodecDecodeError
-from odin.utils import getmeta, lazy_property
+from odin.utils import getmeta
 
 from . import _compat
 from . import content_type_resolvers
+from .data_structures import ApiRoute, PathNode
 from .exceptions import ImmediateHttpResponse, ImmediateErrorHttpResponse
 from .resources import Error
+from .constants import *  # noqa
+from .decorators import *  # noqa
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +33,6 @@ except ImportError:
     pass
 else:
     CODECS[msgpack_codec.CONTENT_TYPE] = msgpack_codec
-
-ApiRoute = namedtuple("ApiRoute", ('route_number', 'path_type', 'method', 'action_name', 'view'))
 
 
 class ResourceApiMeta(type):
@@ -57,7 +60,7 @@ class ResourceApiMeta(type):
         # Get local routes and sort them by route number
         for view, obj in attrs.items():
             if callable(obj) and hasattr(obj, 'route'):
-                routes.append(ApiRoute(*obj.route, view=view))
+                routes.append(obj.route)
                 del obj.route
         routes = sorted(routes, key=lambda o: o.route_number)
 
@@ -66,7 +69,7 @@ class ResourceApiMeta(type):
             if hasattr(parent, 'routes'):
                 routes.extend(parent.routes)
 
-        attrs['routes'] = routes
+        attrs['_routes'] = routes
 
         return super_new(mcs, name, bases, attrs)
 
@@ -79,9 +82,10 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
     """
     The resource this API is modelled on.
     """
-    resource_id_regex = r'\d+'
+
+    resource_id_type = 'int'
     """
-    Regex used to identify a resource ID
+    Resource ID type.
     """
 
     request_type_resolvers = [
@@ -112,14 +116,11 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
     Respond to an options request.
     """
 
-    def __init__(self, api_name=None):
-        if api_name:
-            self.api_name = api_name
-        elif not hasattr(self, 'api_name'):
-            self.api_name = "{}s".format(getmeta(self.resource).name)
+    parent = None
 
-        # The parent api object (if within an API collection)
-        self.parent = None
+    def __init__(self):
+        if not hasattr(self, 'api_name'):
+            self.api_name = "{}".format(getmeta(self.resource).name)
 
     @property
     def debug_enabled(self):
@@ -130,10 +131,69 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
             return self.parent.debug_enabled
         return False
 
-    def api_rules(self):
-        rules = []
-        for route in self.routes:
-            pass
+    def api_routes(self):
+        """
+        Return implementation independent routes 
+        """
+        url_table = OrderedDict()
+        route_table = {}
+
+        for route_ in self._routes:
+            route_number, path_type, methods, action_name, view = route_
+            route_key = "%s-%s" % (path_type, action_name) if action_name else path_type
+
+            # Populate url_table
+            if route_key not in url_table:
+                if path_type == PATH_TYPE_COLLECTION:
+                    regex = action_name or r''
+                else:
+                    if action_name:
+                        regex = r'(?P<resource_id>%s)/%s' % (self.resource_id_regex, action_name)
+                    else:
+                        regex = r'(?P<resource_id>%s)' % self.resource_id_regex
+
+                url_table[route_key] = self.url(regex, self.wrap_view(route_key))
+
+            # Populate route table
+            method_map = route_table.setdefault(route_key, {})
+            for method in methods:
+                method_map[method] = view
+
+            # Add options
+            if self.respond_to_options:
+                method_map.setdefault(constants.OPTIONS, 'options_response')
+
+        # Store the route table at the same time
+        self.route_table = dict(route_table)
+        return list(url_table.values())
+
+        # for func in self._routes:
+        #     route_ = func.route  # type: RouteDefinition
+        #     url_path = [self.api_name]
+        #     if route_.path_type == constants.PATH_TYPE_RESOURCE:
+        #         url_path.append(PathNode('resource_id', self.resource_id_type, None))
+        #     if route_.sub_path:
+        #         url_path += route_.sub_path
+        #
+        #     yield ApiRoute(route_.route_number, url_path, )
+        #
+        # return self._routes
+
+    def get_paths(self):
+        """
+        Return the individual route paths
+        """
+        for route_ in self.routes:
+            assert isinstance(route_, ApiRoute)
+
+            if route_.path_type == constants.PATH_TYPE_COLLECTION:
+                url_path = route_.sub_path or []
+            else:
+                url_path = [PathNode('resource_id', self.resource_id_type, None)]
+                if route_.sub_path:
+                    url_path += route_.sub_path
+
+            route_key = '/'.join(url_path)
 
     def resolve_request_type(self, request):
         """
@@ -261,45 +321,59 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
             return status, response_codec.dumps(resource)
 
 
-# class ApiCollection(object):
-#     """
-#     A collection of several resource APIs
-#     """
-#     def __init__(self, *resource_apis, **kwargs):
-#         self.api_name = kwargs.pop('api_name', 'api')
-#         self.resource_apis = resource_apis
-#
-#     def api_rules(self):
-#         pass
-#
-#
-# class ApiVersion(ApiCollection):
-#     """
-#     A versioned collection of resource APIs
-#     """
-#     def __init__(self, *resource_apis, **kwargs):
-#         kwargs.setdefault('api_name', kwargs.pop('version', 'v1'))
-#         super(ApiVersion, self).__init__(*resource_apis, **kwargs)
-#
-#
-# class Api(object):
-#     """
-#     An API made up of several API versions.
-#
-#     >>> api = Api(
-#     ...     ApiVersion(
-#     ...         UserApi(),
-#     ...         MyApi()
-#     ...     )
-#     ... )
-#
-#     """
-#     def __init__(self, *versions, **kwargs):
-#         self.versions = versions
-#         self.api_name = kwargs.pop('api_name', 'api')
-#
-#     def get_routes(self):
-#         """
-#         Get a list of routes defined by the API.
-#         """
-#         routes = []
+class ApiCollection(object):
+    """
+    A collection of API endpoints
+    """
+    def __init__(self, *endpoints, **options):
+        self.endpoints = endpoints
+
+        self.name = options.pop('name', None)
+        path_prefix = options.pop('path_prefix', None)
+        if not path_prefix:
+            path_prefix = [self.name] if self.name else []
+        self.path_prefix = path_prefix
+
+    def api_routes(self):
+        path_prefix = self.path_prefix
+
+        for endpoint in self.endpoints:
+            for api_route in endpoint.api_routes():
+                route_number, path, methods, callback = api_route
+                yield ApiRoute(route_number, chain(path_prefix, api_route.path), methods, callback)
+
+        if hasattr(self, 'additional_routes'):
+            for api_route in self.additional_routes():
+                route_number, path, methods, callback = api_route
+                yield ApiRoute(route_number, chain(path_prefix, api_route.path), methods, callback)
+
+
+class ApiVersion(ApiCollection):
+    """
+    Collection that defines a version.
+    """
+    def __init__(self, *endpoints, **options):
+        options.setdefault('name', 'v1')
+        super(ApiVersion, self).__init__(*endpoints, **options)
+
+
+class ApiBase(ApiCollection):
+    """
+    Base class for API interface
+    """
+    def __init__(self, *endpoints, **options):
+        options.setdefault('name', 'api')
+        self.url_prefix = options.pop('url_prefix', '/')
+        super(ApiBase, self).__init__(*endpoints, **options)
+
+    def _build_routes(self):
+        parse_node = self.parse_node
+        # Ensure URL's start with a slash
+        path_prefix = (self.url_prefix.strip('/ '), )
+
+        for api_route in self.api_routes():
+            path = '/'.join(parse_node(p) for p in chain(path_prefix, api_route.path))
+            yield path, api_route.methods, api_route.callback
+
+    def parse_node(self, node):
+        raise NotImplementedError()
