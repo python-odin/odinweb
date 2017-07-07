@@ -236,7 +236,8 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
             if response is not None:
                 path_args = response
 
-        result = callback(request, **path_args)
+        # callbacks are obtained prior to binding hence methods are unbound and self needs to be supplied.
+        result = callback(self, request, **path_args)
 
         # Allow for a post_dispatch hook, the response of which is returned
         if hasattr(self, 'post_dispatch'):
