@@ -17,18 +17,18 @@ class ImmediateHttpResponse(Exception):
         self.headers = headers
 
 
-class ImmediateErrorHttpResponse(ImmediateHttpResponse):
+class HttpError(ImmediateHttpResponse):
     """
     An error response that should be returned immediately.
     """
     def __init__(self, status, code, message, developer_message=None, meta=None, headers=None):
-        super(ImmediateErrorHttpResponse, self).__init__(
+        super(HttpError, self).__init__(
             Error(status, code, message, developer_message, meta),
             status, headers
         )
 
 
-class PermissionDenied(ImmediateErrorHttpResponse):
+class PermissionDenied(HttpError):
     """
     Permission to access the specified resource is denied.
     """
