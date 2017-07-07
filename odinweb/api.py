@@ -20,6 +20,8 @@ from . import content_type_resolvers
 from .data_structures import ApiRoute, PathNode
 from .exceptions import ImmediateHttpResponse, ImmediateErrorHttpResponse
 from .resources import Error
+
+# Import all to simplify end user API.
 from .constants import *  # noqa
 from .decorators import *  # noqa
 
@@ -33,6 +35,16 @@ except ImportError:
     pass
 else:
     CODECS[msgpack_codec.CONTENT_TYPE] = msgpack_codec
+
+
+def resolve_content_type(type_resolvers, request):
+    """
+    Resolve content types from a request.
+    """
+    for resolver in type_resolvers:
+        content_type = resolver(request)
+        if content_type:
+            return content_type
 
 
 class ResourceApiMeta(type):
@@ -122,6 +134,8 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
         if not hasattr(self, 'api_name'):
             self.api_name = "{}".format(getmeta(self.resource).name)
 
+        self._route_table = None  # type: dict
+
     @property
     def debug_enabled(self):
         """
@@ -131,87 +145,104 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
             return self.parent.debug_enabled
         return False
 
+    def _test_callback(self, request, **path_args):
+        return "Response: {}\n{}\n{}".format(request.path, path_args, request.method)
+
     def api_routes(self):
         """
         Return implementation independent routes 
         """
-        url_table = OrderedDict()
-        route_table = {}
-
+        api_routes = []
         for route_ in self._routes:
-            route_number, path_type, methods, action_name, view = route_
-            route_key = "%s-%s" % (path_type, action_name) if action_name else path_type
+            path = [self.api_name]
+            if route_.path_type == PATH_TYPE_RESOURCE:
+                path.append(PathNode('resource_id', self.resource_id_type, None))
+            if route_.sub_path:
+                path += route_.sub_path
 
-            # Populate url_table
-            if route_key not in url_table:
-                if path_type == PATH_TYPE_COLLECTION:
-                    regex = action_name or r''
+            api_routes.append(ApiRoute(path, route_.methods, self._wrap_callback(route_.callback, route_.methods)))
+
+        return api_routes
+
+    def _wrap_callback(self, callback, methods):
+        def wrapper(request, **path_args):
+            if request.method not in methods:
+                allow = ','.join(methods)
+                raise ImmediateErrorHttpResponse(405, 40500, "Method not allowed",
+                                                 headers={'Allow': allow}, meta={'allow': allow})
+
+            # Determine the request and response types. Ensure API supports the requested types
+            request_type = resolve_content_type(self.request_type_resolvers, request)
+            response_type = resolve_content_type(self.response_type_resolvers, request)
+            try:
+                request.request_codec = self.registered_codecs[request_type]
+                request.response_codec = response_codec = self.registered_codecs[response_type]
+            except KeyError:
+                return 406, "Content cannot be returned in the format requested"
+
+            try:
+                result = self.dispatch(callback, request, **path_args)
+
+            except ImmediateHttpResponse as e:
+                # An exception used to return a response immediately, skipping any
+                # further processing.
+                status = e.status
+                resource = e.resource
+
+            except ValidationError as e:
+                # A validation error was raised by a resource.
+                status = 400
+                if hasattr(e, 'message_dict'):
+                    resource = Error(status, status * 100, "Failed validation", meta=e.message_dict)
                 else:
-                    if action_name:
-                        regex = r'(?P<resource_id>%s)/%s' % (self.resource_id_regex, action_name)
-                    else:
-                        regex = r'(?P<resource_id>%s)' % self.resource_id_regex
+                    resource = Error(status, status * 100, str(e))
 
-                url_table[route_key] = self.url(regex, self.wrap_view(route_key))
+            except NotImplementedError:
+                status = 501
+                resource = Error(status, status * 100, "The method has not been implemented")
 
-            # Populate route table
-            method_map = route_table.setdefault(route_key, {})
-            for method in methods:
-                method_map[method] = view
+            except Exception as e:
+                if self.debug_enabled:
+                    # If debug is enabled then fallback to the frameworks default
+                    # error processing, this often provides convenience features
+                    # to aid in the debugging process.
+                    raise
+                resource = self.handle_500(request, e)
+                status = resource.status
 
-            # Add options
-            if self.respond_to_options:
-                method_map.setdefault(constants.OPTIONS, 'options_response')
-
-        # Store the route table at the same time
-        self.route_table = dict(route_table)
-        return list(url_table.values())
-
-        # for func in self._routes:
-        #     route_ = func.route  # type: RouteDefinition
-        #     url_path = [self.api_name]
-        #     if route_.path_type == constants.PATH_TYPE_RESOURCE:
-        #         url_path.append(PathNode('resource_id', self.resource_id_type, None))
-        #     if route_.sub_path:
-        #         url_path += route_.sub_path
-        #
-        #     yield ApiRoute(route_.route_number, url_path, )
-        #
-        # return self._routes
-
-    def get_paths(self):
-        """
-        Return the individual route paths
-        """
-        for route_ in self.routes:
-            assert isinstance(route_, ApiRoute)
-
-            if route_.path_type == constants.PATH_TYPE_COLLECTION:
-                url_path = route_.sub_path or []
             else:
-                url_path = [PathNode('resource_id', self.resource_id_type, None)]
-                if route_.sub_path:
-                    url_path += route_.sub_path
+                if isinstance(result, tuple) and len(result) == 2:
+                    resource, status = result
+                else:
+                    resource = result
+                    # Return No Content status if result is None
+                    status = 204 if result is None else 200
 
-            route_key = '/'.join(url_path)
+            if resource is None:
+                return status, None
+            else:
+                return status, response_codec.dumps(resource)
 
-    def resolve_request_type(self, request):
-        """
-        Resolve the request content-type from the request object.
-        """
-        for resolver in self.request_type_resolvers:
-            content_type = resolver(request)
-            if content_type:
-                return content_type
+        return wrapper
 
-    def request_response_type(self, request):
-        """
-        Resolve the response content-type from the request object.
-        """
-        for resolver in self.response_type_resolvers:
-            content_type = resolver(request)
-            if content_type:
-                return content_type
+    def dispatch(self, callback, request, **path_args):
+        # Authorisation hook
+        if hasattr(self, 'handle_authorisation'):
+            self.handle_authorisation(request)
+
+        # Allow for a pre_dispatch hook, a response from pre_dispatch would indicate an override of kwargs
+        if hasattr(self, 'pre_dispatch'):
+            response = self.pre_dispatch(request, **path_args)
+            if response is not None:
+                path_args = response
+
+        result = callback(request, **path_args)
+
+        # Allow for a post_dispatch hook, the response of which is returned
+        if hasattr(self, 'post_dispatch'):
+            self.post_dispatch(request, result)
+        else:
+            return result
 
     def handle_500(self, request, exception):
         """
@@ -266,60 +297,6 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
 
         return resource
 
-    def view(self, request):
-
-        # Determine the request and response types. Ensure API supports the requested types
-        request_type = self.resolve_request_type(request)
-        response_type = self.resolve_response_type(request)
-        try:
-            request.request_codec = self.registered_codecs[request_type]
-            request.response_codec = response_codec = self.registered_codecs[response_type]
-        except KeyError:
-            return 406, "Content cannot be returned in the format requested"
-
-        try:
-            result = self.dispatch_to_view(f, request)
-
-        except ImmediateHttpResponse as e:
-            # An exception used to return a response immediately, skipping any
-            # further processing.
-            status = e.status
-            resource = e.resource
-
-        except ValidationError as e:
-            # A validation error was raised by a resource.
-            status = 400
-            if hasattr(e, 'message_dict'):
-                resource = Error(status, status * 100, "Failed validation", meta=e.message_dict)
-            else:
-                resource = Error(status, status * 100, str(e))
-
-        except NotImplementedError:
-            status = 501
-            resource = Error(status, status * 100, "The method has not been implemented")
-
-        except Exception as e:
-            if self.debug_enabled:
-                # If debug is enabled then fallback to the frameworks default
-                # error processing, this often provides convenience features
-                # to aid in the debugging process.
-                raise
-            resource = self.handle_500(request, e)
-            status = resource.status
-
-        else:
-            if isinstance(result, tuple) and len(result) == 2:
-                resource, status = result
-            else:
-                resource = result
-                # Return No Content status if result is None
-                status = 204 if result is None else 200
-
-        if resource is None:
-            return status, None
-        else:
-            return status, response_codec.dumps(resource)
-
 
 class ApiCollection(object):
     """
@@ -339,13 +316,11 @@ class ApiCollection(object):
 
         for endpoint in self.endpoints:
             for api_route in endpoint.api_routes():
-                route_number, path, methods, callback = api_route
-                yield ApiRoute(route_number, chain(path_prefix, api_route.path), methods, callback)
+                yield ApiRoute(chain(path_prefix, api_route.path), api_route.methods, api_route.callback)
 
         if hasattr(self, 'additional_routes'):
             for api_route in self.additional_routes():
-                route_number, path, methods, callback = api_route
-                yield ApiRoute(route_number, chain(path_prefix, api_route.path), methods, callback)
+                yield ApiRoute(chain(path_prefix, api_route.path), api_route.methods, api_route.callback)
 
 
 class ApiVersion(ApiCollection):
@@ -373,7 +348,7 @@ class ApiBase(ApiCollection):
 
         for api_route in self.api_routes():
             path = '/'.join(parse_node(p) for p in chain(path_prefix, api_route.path))
-            yield path, api_route.methods, api_route.callback
+            yield ApiRoute(path, api_route.methods, api_route.callback)
 
     def parse_node(self, node):
         raise NotImplementedError()
