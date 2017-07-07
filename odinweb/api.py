@@ -6,19 +6,16 @@ API
 from __future__ import absolute_import, unicode_literals
 
 import logging
-import sys
 
-from collections import OrderedDict
 from itertools import chain
-
 from odin.codecs import json_codec
 from odin.exceptions import ValidationError, CodecDecodeError
 from odin.utils import getmeta
 
 from . import _compat
 from . import content_type_resolvers
-from .data_structures import ApiRoute, PathNode
-from .exceptions import ImmediateHttpResponse, ImmediateErrorHttpResponse
+from .data_structures import ApiRoute, PathNode, HttpResponse
+from .exceptions import ImmediateHttpResponse, HttpError
 from .resources import Error
 
 # Import all to simplify end user API.
@@ -27,7 +24,10 @@ from .decorators import *  # noqa
 
 logger = logging.getLogger(__name__)
 
-CODECS = {json_codec.CONTENT_TYPE: json_codec}
+CODECS = {
+    'text/plain': json_codec,
+    json_codec.CONTENT_TYPE: json_codec,
+}
 # Attempt to load other codecs that have dependencies
 try:
     from odin.codecs import msgpack_codec
@@ -145,9 +145,6 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
             return self.parent.debug_enabled
         return False
 
-    def _test_callback(self, request, **path_args):
-        return "Response: {}\n{}\n{}".format(request.path, path_args, request.method)
-
     def api_routes(self):
         """
         Return implementation independent routes 
@@ -166,40 +163,41 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
 
     def _wrap_callback(self, callback, methods):
         def wrapper(request, **path_args):
-            if request.method not in methods:
-                allow = ','.join(methods)
-                raise ImmediateErrorHttpResponse(405, 40500, "Method not allowed",
-                                                 headers={'Allow': allow}, meta={'allow': allow})
-
             # Determine the request and response types. Ensure API supports the requested types
             request_type = resolve_content_type(self.request_type_resolvers, request)
             response_type = resolve_content_type(self.response_type_resolvers, request)
             try:
                 request.request_codec = self.registered_codecs[request_type]
-                request.response_codec = response_codec = self.registered_codecs[response_type]
+                request.response_codec = self.registered_codecs[response_type]
             except KeyError:
-                return 406, "Content cannot be returned in the format requested"
+                return HttpResponse("Content cannot be returned in the format requested", 406)
+
+            # Check if method is in our allowed method list
+            if request.method not in methods:
+                return HttpResponse("Method not allowed", 405, {'Allow', ','.join(methods)})
+
+            # Response types
+            status = headers = None
 
             try:
-                result = self.dispatch(callback, request, **path_args)
+                resource = self.dispatch(callback, request, **path_args)
 
             except ImmediateHttpResponse as e:
                 # An exception used to return a response immediately, skipping any
                 # further processing.
-                status = e.status
-                resource = e.resource
+                resource, status, headers = e.resource, e.status, e.headers
 
             except ValidationError as e:
                 # A validation error was raised by a resource.
-                status = 400
                 if hasattr(e, 'message_dict'):
-                    resource = Error(status, status * 100, "Failed validation", meta=e.message_dict)
+                    resource = Error(400, 40000, "Failed validation", meta=e.message_dict)
                 else:
-                    resource = Error(status, status * 100, str(e))
+                    resource = Error(400, 40000, str(e))
+                status = resource.status
 
             except NotImplementedError:
-                status = 501
-                resource = Error(status, status * 100, "The method has not been implemented")
+                resource = Error(501, 50100, "The method has not been implemented")
+                status = resource.status
 
             except Exception as e:
                 if self.debug_enabled:
@@ -210,18 +208,11 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
                 resource = self.handle_500(request, e)
                 status = resource.status
 
-            else:
-                if isinstance(result, tuple) and len(result) == 2:
-                    resource, status = result
-                else:
-                    resource = result
-                    # Return No Content status if result is None
-                    status = 204 if result is None else 200
+            # Return a HttpResponse and just send it!
+            if isinstance(resource, HttpResponse):
+                return resource
 
-            if resource is None:
-                return status, None
-            else:
-                return status, response_codec.dumps(resource)
+            return self.create_response(request, resource, status, headers)
 
         return wrapper
 
@@ -241,7 +232,7 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
 
         # Allow for a post_dispatch hook, the response of which is returned
         if hasattr(self, 'post_dispatch'):
-            self.post_dispatch(request, result)
+            return self.post_dispatch(request, result)
         else:
             return result
 
@@ -249,18 +240,11 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
         """
         Handle an *un-handled* exception.
         """
-        exc_info = sys.exc_info()
-
-        if self.debug_enabled:
-            import traceback
-            return Error(500, 50000, "An unhandled error has been caught.",
-                         str(exception), traceback.format_exception(*exc_info))
-        else:
-            logger.error('Internal Server Error: %s', request.path, exc_info=exc_info, extra={
-                'status_code': 500,
-                'request': request
-            })
-            return Error(500, 50000, "An unhandled error has been caught.")
+        logger.exception('Internal Server Error: %s', exception, extra={
+            'status_code': 500,
+            'request': request
+        })
+        return Error(500, 50000, "An unhandled error has been caught.")
 
     def decode_body(self, request):
         """
@@ -281,28 +265,48 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
         try:
             body = self.decode_body(request)
         except UnicodeDecodeError as ude:
-            raise ImmediateErrorHttpResponse(400, 40099, "Unable to decode request body.", str(ude))
+            raise HttpError(400, 40099, "Unable to decode request body.", str(ude))
 
         try:
             resource = request.request_codec.loads(body, resource=resource, full_clean=False)
 
         except ValueError as ve:
-            raise ImmediateErrorHttpResponse(400, 40098, "Unable to load resource.", str(ve))
+            raise HttpError(400, 40098, "Unable to load resource.", str(ve))
 
         except CodecDecodeError as cde:
-            raise ImmediateErrorHttpResponse(400, 40096, "Unable to decode body.", str(cde))
+            raise HttpError(400, 40096, "Unable to decode body.", str(cde))
 
         # Check an array of data hasn't been supplied
         if not allow_multiple and isinstance(resource, list):
-            raise ImmediateErrorHttpResponse(400, 40097, "Expected a single resource not a list.")
+            raise HttpError(400, 40097, "Expected a single resource not a list.")
 
         return resource
 
+    def create_response(self, request, body=None, status=None, headers=None):
+        """
+        Generate a HttpResponse.
+        
+        :param request: Request object 
+        :param body: Body of the response
+        :param status: HTTP status code
+        :param headers: Any headers.
 
-class ApiCollection(object):
-    """
-    A collection of API endpoints
-    """
+        """
+        if not body:
+            return HttpResponse(None, status or 204, headers)
+
+        try:
+            body = request.response_codec.dumps(body)
+        except Exception as ex:
+            self.handle_500(request, ex)
+            return HttpResponse("Error encoding response.", 500)
+        else:
+            response = HttpResponse(body, status or 200, headers)
+            response.set_content_type(request.response_codec.CONTENT_TYPE)
+            return response
+
+
+class ApiContainer(object):
     def __init__(self, *endpoints, **options):
         self.endpoints = endpoints
 
@@ -312,16 +316,38 @@ class ApiCollection(object):
             path_prefix = [self.name] if self.name else []
         self.path_prefix = path_prefix
 
+        if options:
+            raise TypeError("Got an unexpected keyword argument '{}'", options.keys()[-1])
+
     def api_routes(self):
+        """
+        """
         path_prefix = self.path_prefix
 
         for endpoint in self.endpoints:
+            endpoint.parent = self
             for api_route in endpoint.api_routes():
                 yield ApiRoute(chain(path_prefix, api_route.path), api_route.methods, api_route.callback)
 
         if hasattr(self, 'additional_routes'):
             for api_route in self.additional_routes():
                 yield ApiRoute(chain(path_prefix, api_route.path), api_route.methods, api_route.callback)
+
+
+class ApiCollection(ApiContainer):
+    """
+    A collection of API endpoints
+    """
+    parent = None
+
+    @property
+    def debug_enabled(self):
+        """
+        Is debugging enabled?
+        """
+        if self.parent:
+            return self.parent.debug_enabled
+        return False
 
 
 class ApiVersion(ApiCollection):
@@ -333,13 +359,14 @@ class ApiVersion(ApiCollection):
         super(ApiVersion, self).__init__(*endpoints, **options)
 
 
-class ApiBase(ApiCollection):
+class ApiBase(ApiContainer):
     """
     Base class for API interface
     """
     def __init__(self, *endpoints, **options):
         options.setdefault('name', 'api')
         self.url_prefix = options.pop('url_prefix', '/')
+        self.debug_enabled = options.pop('debug_enabled', False)
         super(ApiBase, self).__init__(*endpoints, **options)
 
     def _build_routes(self):
