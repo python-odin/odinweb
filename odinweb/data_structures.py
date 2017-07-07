@@ -15,8 +15,8 @@ class HttpResponse(object):
     __slots__ = ('status', 'body', 'headers')
 
     def __init__(self, body, status=200, headers=None):
-        self.status = status
         self.body = body
+        self.status = status
         self.headers = headers or {}
 
     def __getitem__(self, item):
