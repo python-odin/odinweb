@@ -74,14 +74,13 @@ class ResourceApiMeta(type):
             if callable(obj) and hasattr(obj, 'route'):
                 routes.append(obj.route)
                 del obj.route
-        routes = sorted(routes, key=lambda o: o.route_number)
 
         # Get routes from parent objects
         for parent in parents:
-            if hasattr(parent, 'routes'):
-                routes.extend(parent.routes)
+            if hasattr(parent, '_routes'):
+                routes.extend(parent._routes)
 
-        attrs['_routes'] = routes
+        attrs['_routes'] = sorted(routes, key=lambda o: o.route_number)
 
         return super_new(mcs, name, bases, attrs)
 
@@ -98,6 +97,11 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
     resource_id_type = 'int'
     """
     Resource ID type.
+    """
+
+    resource_id_name = 'resource_id'
+    """
+    Name of the resource ID field
     """
 
     request_type_resolvers = [
@@ -132,9 +136,7 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
 
     def __init__(self):
         if not hasattr(self, 'api_name'):
-            self.api_name = "{}".format(getmeta(self.resource).name)
-
-        self._route_table = None  # type: dict
+            self.api_name = "{}".format(getmeta(self.resource).name.lower())
 
     @property
     def debug_enabled(self):
@@ -153,7 +155,7 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
         for route_ in self._routes:
             path = [self.api_name]
             if route_.path_type == PATH_TYPE_RESOURCE:
-                path.append(PathNode('resource_id', self.resource_id_type, None))
+                path.append(PathNode(self.resource_id_name, self.resource_id_type, None))
             if route_.sub_path:
                 path += route_.sub_path
 
@@ -165,16 +167,20 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
         def wrapper(request, **path_args):
             # Determine the request and response types. Ensure API supports the requested types
             request_type = resolve_content_type(self.request_type_resolvers, request)
-            response_type = resolve_content_type(self.response_type_resolvers, request)
             try:
                 request.request_codec = self.registered_codecs[request_type]
+            except KeyError:
+                return HttpResponse("Un-supported body content.", 406)
+
+            response_type = resolve_content_type(self.response_type_resolvers, request)
+            try:
                 request.response_codec = self.registered_codecs[response_type]
             except KeyError:
-                return HttpResponse("Content cannot be returned in the format requested", 406)
+                return HttpResponse("Un-supported response type.", 406)
 
             # Check if method is in our allowed method list
             if request.method not in methods:
-                return HttpResponse("Method not allowed", 405, {'Allow', ','.join(methods)})
+                return HttpResponse("Method not allowed.", 405, {'Allow', ','.join(methods)})
 
             # Response types
             status = headers = None

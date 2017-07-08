@@ -20,7 +20,7 @@ __all__ = (
     # Handlers
     'list_response',
     # Shortcuts
-    'listing', 'create', 'detail', 'update', 'patch', 'delete'
+    'listing', 'create', 'detail', 'update', 'patch', 'delete', 'action', 'detail_action'
 )
 
 # Counter used to order routes
@@ -82,7 +82,7 @@ collection = collection_action = action = route
 def resource_route(func=None, method=constants.GET, resource=None, sub_path=None):
     return route(func, constants.PATH_TYPE_RESOURCE, method, resource, sub_path)
 
-resource_action = resource_route
+resource_action = detail_action = resource_route
 
 
 # Handlers

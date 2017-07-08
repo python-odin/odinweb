@@ -1,17 +1,11 @@
+from __future__ import absolute_import
+
 import pytest
 import mock
 
-from odinweb import api
-
-
-def mock_callback(self, request, **kwargs):
-    return 'returned'
-
-
-class MockResourceApi(object):
-    def api_routes(self):
-        yield api.ApiRoute(['a', 'b'], ['GET'], mock_callback)
-        yield api.ApiRoute(['d', 'e'], ['POST', 'PATCH'], mock_callback)
+from odin.exceptions import ValidationError
+from odinweb import api, decorators
+from .resources import User
 
 
 def flatten_routes(api_routes):
@@ -20,9 +14,178 @@ def flatten_routes(api_routes):
     """
     def flatten(api_route):
         path, methods, callback = api_route
-        return api.ApiRoute(list(path), methods, callback)
+        return api.ApiRoute(
+            ["<%s>" % p.name if isinstance(p, api.PathNode) else p for p in path],
+            methods, callback
+        )
 
     return [flatten(r) for r in api_routes]
+
+
+class TestResourceApiMeta(object):
+    def test_empty_api(self, mocker):
+        mocker.patch('odinweb.decorators._route_count', 0)
+
+        class ExampleApi(api.ResourceApi):
+            pass
+
+        assert ExampleApi._routes == []
+
+    def test_normal_api(self, mocker):
+        mocker.patch('odinweb.decorators._route_count', 0)
+
+        class ExampleApi(api.ResourceApi):
+            @api.collection
+            def list_items(self, request):
+                pass
+
+            @api.detail
+            def get_item(self, request, resource_id):
+                pass
+
+            @api.route(methods=('POST', 'PUT'))
+            def create_item(self, request):
+                pass
+
+        assert ExampleApi._routes == [
+            decorators.RouteDefinition(0, 'collection', ('GET',), None, ExampleApi.__dict__['list_items']),
+            decorators.RouteDefinition(1, 'resource', ('GET',), None, ExampleApi.__dict__['get_item']),
+            decorators.RouteDefinition(2, 'collection', ('POST', 'PUT'), None, ExampleApi.__dict__['create_item']),
+        ]
+
+    def test_sub_classed_api(self, mocker):
+        mocker.patch('odinweb.decorators._route_count', 0)
+
+        class SuperApi(api.ResourceApi):
+            @api.collection
+            def list_items(self, request):
+                pass
+
+        class SubApi(SuperApi):
+            @api.detail
+            def get_item(self, request, resource_id):
+                pass
+
+            @api.route(methods=('POST', 'PUT'))
+            def create_item(self, request):
+                pass
+
+        assert SubApi._routes == [
+            decorators.RouteDefinition(0, 'collection', ('GET',), None, SuperApi.__dict__['list_items']),
+            decorators.RouteDefinition(1, 'resource', ('GET',), None, SubApi.__dict__['get_item']),
+            decorators.RouteDefinition(2, 'collection', ('POST', 'PUT'), None, SubApi.__dict__['create_item']),
+        ]
+
+
+class UserApi(api.ResourceApi):
+    resource = User
+
+    @api.collection
+    def list_items(self, request):
+        return [User(1, 'Dave'), User(2, 'Bob')]
+
+    @api.detail
+    def get_item(self, request, resource_id):
+        return User(resource_id, 'Dave')
+
+    @api.detail_action(sub_path='start', method=api.POST)
+    def start_item(self, request):
+        return self.create_response(request, status=202)
+
+
+class MockRequest(object):
+    def __init__(self, method='GET', headers=None):
+        self.method = method
+        self.headers = headers or {}
+
+
+class TestResourceApi(object):
+    def test_api_name__default(self):
+        target = UserApi()
+
+        assert target.api_name == 'user'
+
+    def test_api_name__custom(self):
+        class Example(api.ResourceApi):
+            resource = User
+            api_name = 'users'
+
+        target = Example()
+
+        assert target.api_name == 'users'
+
+    def test_debug_enabled__no_parent(self):
+        target = UserApi()
+
+        assert not target.debug_enabled
+
+    def test_debug_enabled__with_parent(self):
+        parent = mock.Mock()
+        parent.debug_enabled = True
+
+        target = UserApi()
+        target.parent = parent
+
+        assert target.debug_enabled
+
+    def test_api_routes(self):
+        target = UserApi()
+        target._wrap_callback = lambda callback, methods: callback
+
+        actual = flatten_routes(target.api_routes())
+
+        assert actual == [
+            api.ApiRoute(['user'], ('GET',), UserApi.__dict__['list_items']),
+            api.ApiRoute(['user', '<resource_id>'], ('GET',), UserApi.__dict__['get_item']),
+            api.ApiRoute(['user', '<resource_id>', 'start'], ('POST',), UserApi.__dict__['start_item']),
+        ]
+
+    @pytest.mark.parametrize('r, status, message', (
+        (MockRequest(headers={'content-type': 'application/xml', 'accepts': 'application/json'}),
+         406, 'Un-supported body content.'),
+        (MockRequest(headers={'content-type': 'application/json', 'accepts': 'application/xml'}),
+         406, 'Un-supported response type.'),
+        (MockRequest('POST'), 405, 'Method not allowed.'),
+    ))
+    def test_wrap_callback__invalid_headers(self, r, status, message):
+        def callback(s, request):
+            pass
+
+        target = UserApi()
+        wrapper = target._wrap_callback(callback, ['GET'])
+        actual = wrapper(r)
+
+        assert actual.body == message
+        assert actual.status == status
+
+    @pytest.mark.parametrize('error,status', (
+        (api.ImmediateHttpResponse(None, 330, {}), 330),
+        (ValidationError("Error"), 400),
+        (ValidationError({}), 400),
+        (NotImplementedError, 501),
+        (ValueError, 500)
+    ))
+    def test_wrap_callback__exceptions(self, error, status):
+        def callback(s, request):
+            raise error
+
+        target = UserApi()
+        wrapper = target._wrap_callback(callback, ['GET'])
+        actual = wrapper(MockRequest())
+
+        assert actual.status == status
+
+
+
+
+def mock_callback(self, request, **kwargs):
+    return 'returned'
+
+
+class MockResourceApi(object):
+    def api_routes(self):
+        yield api.ApiRoute(['a', 'b'], ('GET',), mock_callback)
+        yield api.ApiRoute(['d', 'e'], ('POST', 'PATCH'), mock_callback)
 
 
 class TestApiContainer(object):
@@ -51,8 +214,8 @@ class TestApiContainer(object):
 
         actual = flatten_routes(target.api_routes())
         assert actual == [
-            api.ApiRoute(['z', 'a', 'b'], ['GET'], mock_callback),
-            api.ApiRoute(['z', 'd', 'e'], ['POST', 'PATCH'], mock_callback),
+            api.ApiRoute(['z', 'a', 'b'], ('GET',), mock_callback),
+            api.ApiRoute(['z', 'd', 'e'], ('POST', 'PATCH'), mock_callback),
         ]
 
     def test_additional_routes(self):
@@ -112,7 +275,7 @@ class TestApiCollection(object):
 class MockApiInterface(api.ApiInterfaceBase):
     def parse_node(self, node):
         if isinstance(node, api.PathNode):
-            return node.name
+            return "<%s>" % node.name
         else:
             return str(node)
 
@@ -134,16 +297,16 @@ class TestApiInterfaceBase(object):
 
     @pytest.mark.parametrize('options,api_routes', (
         ({}, [
-            api.ApiRoute('/api/a/b', ['GET'], mock_callback),
-            api.ApiRoute('/api/d/e', ['POST', 'PATCH'], mock_callback),
+            api.ApiRoute('/api/a/b', ('GET',), mock_callback),
+            api.ApiRoute('/api/d/e', ('POST', 'PATCH'), mock_callback),
         ]),
         ({'url_prefix': 'my-app'}, [
-            api.ApiRoute('my-app/api/a/b', ['GET'], mock_callback),
-            api.ApiRoute('my-app/api/d/e', ['POST', 'PATCH'], mock_callback),
+            api.ApiRoute('my-app/api/a/b', ('GET',), mock_callback),
+            api.ApiRoute('my-app/api/d/e', ('POST', 'PATCH'), mock_callback),
         ]),
         ({'name': '!api', 'url_prefix': '/my-app'}, [
-            api.ApiRoute('/my-app/!api/a/b', ['GET'], mock_callback),
-            api.ApiRoute('/my-app/!api/d/e', ['POST', 'PATCH'], mock_callback),
+            api.ApiRoute('/my-app/!api/a/b', ('GET',), mock_callback),
+            api.ApiRoute('/my-app/!api/d/e', ('POST', 'PATCH'), mock_callback),
         ]),
     ))
     def test_build_routes(self, options, api_routes):
@@ -160,9 +323,12 @@ class TestApiInterfaceBase(object):
 
 
 def test_nested_api():
+    user_api = UserApi()
+    user_api._wrap_callback = lambda callback, methods: callback
+
     target = MockApiInterface(
         api.ApiVersion(
-            MockResourceApi()
+            user_api
         ),
         api.ApiVersion(
             api.ApiCollection(
@@ -176,8 +342,9 @@ def test_nested_api():
 
     actual = list(target.build_routes())
     assert actual == [
-        api.ApiRoute('/!api/v1/a/b', ['GET'], mock_callback),
-        api.ApiRoute('/!api/v1/d/e', ['POST', 'PATCH'], mock_callback),
-        api.ApiRoute('/!api/v2/collection/a/b', ['GET'], mock_callback),
-        api.ApiRoute('/!api/v2/collection/d/e', ['POST', 'PATCH'], mock_callback),
+        api.ApiRoute('/!api/v1/user', ('GET',), UserApi.__dict__['list_items']),
+        api.ApiRoute('/!api/v1/user/<resource_id>', ('GET',), UserApi.__dict__['get_item']),
+        api.ApiRoute('/!api/v1/user/<resource_id>/start', ('POST',), UserApi.__dict__['start_item']),
+        api.ApiRoute('/!api/v2/collection/a/b', ('GET',), mock_callback),
+        api.ApiRoute('/!api/v2/collection/d/e', ('POST', 'PATCH'), mock_callback),
     ]
