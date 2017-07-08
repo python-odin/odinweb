@@ -307,6 +307,13 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
 
 
 class ApiContainer(object):
+    """
+    Container or API endpoints.
+    
+    This class is intended as a base class for other API classes. Containers
+    can also be nested. This is used to support versions etc.
+    
+    """
     def __init__(self, *endpoints, **options):
         self.endpoints = endpoints
 
@@ -321,6 +328,7 @@ class ApiContainer(object):
 
     def api_routes(self):
         """
+        Return all of the API routes defined the API endpoints in the container.
         """
         path_prefix = self.path_prefix
 
@@ -330,7 +338,11 @@ class ApiContainer(object):
                 yield ApiRoute(chain(path_prefix, api_route.path), api_route.methods, api_route.callback)
 
         if hasattr(self, 'additional_routes'):
-            for api_route in self.additional_routes():
+            additional_routes = self.additional_routes
+            if callable(additional_routes):
+                additional_routes = additional_routes()
+
+            for api_route in additional_routes:
                 yield ApiRoute(chain(path_prefix, api_route.path), api_route.methods, api_route.callback)
 
 
@@ -352,27 +364,32 @@ class ApiCollection(ApiContainer):
 
 class ApiVersion(ApiCollection):
     """
-    Collection that defines a version.
+    Collection that defines a version of an API.
     """
     def __init__(self, *endpoints, **options):
-        options.setdefault('name', 'v1')
+        self.version = options.pop('version', 1)
+        options.setdefault('name', 'v{}'.format(self.version))
         super(ApiVersion, self).__init__(*endpoints, **options)
 
 
-class ApiBase(ApiContainer):
+class ApiInterfaceBase(ApiContainer):
     """
-    Base class for API interface
+    Base class for API interfaces. 
+    
+    API interfaces are the interfaces between OdinWeb and the web framework 
+    being used.
+    
     """
     def __init__(self, *endpoints, **options):
         options.setdefault('name', 'api')
         self.url_prefix = options.pop('url_prefix', '/')
         self.debug_enabled = options.pop('debug_enabled', False)
-        super(ApiBase, self).__init__(*endpoints, **options)
+        super(ApiInterfaceBase, self).__init__(*endpoints, **options)
 
-    def _build_routes(self):
+    def build_routes(self):
         parse_node = self.parse_node
         # Ensure URL's start with a slash
-        path_prefix = (self.url_prefix.strip('/ '), )
+        path_prefix = (self.url_prefix.rstrip('/ '), )
 
         for api_route in self.api_routes():
             path = '/'.join(parse_node(p) for p in chain(path_prefix, api_route.path))
