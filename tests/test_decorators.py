@@ -4,7 +4,7 @@ from odinweb import decorators
 from odinweb import constants
 
 
-@pytest.mark.parametrize('decorator,definition'.split(','), (
+@pytest.mark.parametrize('decorator,definition', (
     (decorators.route, (constants.PATH_TYPE_COLLECTION, (constants.GET,), None)),
     (decorators.resource_route, (constants.PATH_TYPE_RESOURCE, (constants.GET,), None)),
     (decorators.listing, (constants.PATH_TYPE_COLLECTION, (constants.GET,), None)),
@@ -20,4 +20,5 @@ def test_endpoint_decorators(decorator, definition):
         pass
 
     assert target.route.route_number == decorators._route_count - 1
-    assert target.route[1:] == definition
+    assert target.route[1:-1] == definition
+    assert target.route[-1] == target
