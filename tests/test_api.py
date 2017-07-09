@@ -2,8 +2,9 @@ from __future__ import absolute_import
 
 import pytest
 import mock
+from odin.codecs import json_codec
 
-from odin.exceptions import ValidationError
+from odin.exceptions import ValidationError, CodecDecodeError
 from odinweb import api, decorators
 from .resources import User
 
@@ -21,6 +22,65 @@ def flatten_routes(api_routes):
 
     return [flatten(r) for r in api_routes]
 
+
+#################################################
+# Mocks
+
+def mock_callback(self, request, **kwargs):
+    return 'returned'
+
+
+class UserApi(api.ResourceApi):
+    resource = User
+    
+    def __init__(self):
+        super(UserApi, self).__init__()
+        self.calls = []
+
+    @api.collection
+    def list_items(self, request):
+        self.calls.append('list_items')
+        return [User(1, 'Dave'), User(2, 'Bob')]
+
+    @api.detail
+    def get_item(self, request, resource_id):
+        self.calls.append('get_item')
+        return User(resource_id, 'Dave')
+
+    @api.detail_action(sub_path='start', method=api.POST)
+    def start_item(self, request):
+        self.calls.append('start_item')
+        return self.create_response(request, status=202)
+
+    def mock_callback(self, request, **path_args):
+        self.calls.append('mock_callback')
+        return path_args
+
+
+class MockRequest(object):
+    def __init__(self, method='GET', headers=None, body=None, request_codec=None):
+        self.body = body
+        self.method = method
+        self.headers = headers or {}
+        self.request_codec = request_codec or json_codec
+
+
+class MockResourceApi(object):
+    def api_routes(self):
+        yield api.ApiRoute(['a', 'b'], ('GET',), mock_callback)
+        yield api.ApiRoute(['d', 'e'], ('POST', 'PATCH'), mock_callback)
+
+
+class MockApiInterface(api.ApiInterfaceBase):
+    def parse_node(self, node):
+        if isinstance(node, api.PathNode):
+            return "<%s>" % node.name
+        else:
+            return str(node)
+
+
+#################################################
+# Tests
 
 class TestResourceApiMeta(object):
     def test_empty_api(self, mocker):
@@ -75,28 +135,6 @@ class TestResourceApiMeta(object):
             decorators.RouteDefinition(1, 'resource', ('GET',), None, SubApi.__dict__['get_item']),
             decorators.RouteDefinition(2, 'collection', ('POST', 'PUT'), None, SubApi.__dict__['create_item']),
         ]
-
-
-class UserApi(api.ResourceApi):
-    resource = User
-
-    @api.collection
-    def list_items(self, request):
-        return [User(1, 'Dave'), User(2, 'Bob')]
-
-    @api.detail
-    def get_item(self, request, resource_id):
-        return User(resource_id, 'Dave')
-
-    @api.detail_action(sub_path='start', method=api.POST)
-    def start_item(self, request):
-        return self.create_response(request, status=202)
-
-
-class MockRequest(object):
-    def __init__(self, method='GET', headers=None):
-        self.method = method
-        self.headers = headers or {}
 
 
 class TestResourceApi(object):
@@ -175,17 +213,72 @@ class TestResourceApi(object):
 
         assert actual.status == status
 
+    def test_dispatch__with_authorisation(self):
+        class AuthorisedUserApi(UserApi):
+            def handle_authorisation(self, request):
+                self.calls.append('handle_authorisation')
 
+        target = AuthorisedUserApi()
+        result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
 
+        assert 'handle_authorisation' in target.calls
+        assert result == {"a": "b"}
 
-def mock_callback(self, request, **kwargs):
-    return 'returned'
+    def test_dispatch__with_pre_dispatch(self):
+        class AuthorisedUserApi(UserApi):
+            def pre_dispatch(self, request, **path_args):
+                self.calls.append('pre_dispatch')
 
+        target = AuthorisedUserApi()
+        result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
 
-class MockResourceApi(object):
-    def api_routes(self):
-        yield api.ApiRoute(['a', 'b'], ('GET',), mock_callback)
-        yield api.ApiRoute(['d', 'e'], ('POST', 'PATCH'), mock_callback)
+        assert 'pre_dispatch' in target.calls
+        assert 'mock_callback' in target.calls
+        assert result == {"a": "b"}
+
+    def test_dispatch__with_pre_dispatch_modify_path_args(self):
+        class AuthorisedUserApi(UserApi):
+            def pre_dispatch(self, request, **path_args):
+                self.calls.append('pre_dispatch')
+                return {}
+
+        target = AuthorisedUserApi()
+        result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
+
+        assert 'pre_dispatch' in target.calls
+        assert 'mock_callback' in target.calls
+        assert result == {}
+
+    def test_dispatch__with_post_dispatch(self):
+        class AuthorisedUserApi(UserApi):
+            def post_dispatch(self, request, result):
+                self.calls.append('post_dispatch')
+                result['c'] = 'd'
+                return result
+
+        target = AuthorisedUserApi()
+        result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
+
+        assert 'post_dispatch' in target.calls
+        assert 'mock_callback' in target.calls
+        assert result == {"a": "b", "c": "d"}
+
+    @pytest.mark.parametrize('body, error_code', (
+        (bytes('\xFF'), 40099),  # Invalid UTF-8
+        (None, 40096,),
+        ('stuff', 40096),
+        ('{"a":"b",}', 40096),
+        ('[{"a":"b"}]', 40097),
+    ))
+    def test_resource_from_body__codec_exceptions(self, body, error_code):
+        target = UserApi()
+        request = MockRequest(body=body)
+
+        with pytest.raises(api.HttpError) as exc_info:
+            target.resource_from_body(request)
+
+        assert exc_info.value.status == 400
+        assert exc_info.value.resource.code == error_code
 
 
 class TestApiContainer(object):
@@ -270,14 +363,6 @@ class TestApiCollection(object):
         assert target.version == version
         assert target.name == name
         assert target.path_prefix == path_prefix
-
-
-class MockApiInterface(api.ApiInterfaceBase):
-    def parse_node(self, node):
-        if isinstance(node, api.PathNode):
-            return "<%s>" % node.name
-        else:
-            return str(node)
 
 
 class TestApiInterfaceBase(object):
