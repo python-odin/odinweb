@@ -7,6 +7,7 @@ from __future__ import absolute_import, unicode_literals
 
 import logging
 
+from functools import wraps
 from itertools import chain
 from odin.codecs import json_codec
 from odin.exceptions import ValidationError, CodecDecodeError
@@ -31,10 +32,15 @@ CODECS = {
 # Attempt to load other codecs that have dependencies
 try:
     from odin.codecs import msgpack_codec
+    CODECS[msgpack_codec.CONTENT_TYPE] = msgpack_codec
 except ImportError:
     pass
-else:
-    CODECS[msgpack_codec.CONTENT_TYPE] = msgpack_codec
+
+try:
+    from odin.codecs import yaml_codec
+    CODECS[yaml_codec.CONTENT_TYPE] = yaml_codec
+except ImportError:
+    pass
 
 
 def resolve_content_type(type_resolvers, request):
@@ -138,6 +144,8 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
         if not hasattr(self, 'api_name'):
             self.api_name = "{}".format(getmeta(self.resource).name.lower())
 
+        self._api_routes = None
+
     @property
     def debug_enabled(self):
         """
@@ -151,19 +159,22 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
         """
         Return implementation independent routes 
         """
-        api_routes = []
-        for route_ in self._routes:
-            path = [self.api_name]
-            if route_.path_type == PATH_TYPE_RESOURCE:
-                path.append(PathNode(self.resource_id_name, self.resource_id_type, None))
-            if route_.sub_path:
-                path += route_.sub_path
+        if self._api_routes is None:
+            api_routes = []
+            for route_ in self._routes:
+                path = [self.api_name]
+                if route_.path_type == PATH_TYPE_RESOURCE:
+                    path.append(PathNode(self.resource_id_name, self.resource_id_type, None))
+                if route_.sub_path:
+                    path += route_.sub_path
 
-            api_routes.append(ApiRoute(path, route_.methods, self._wrap_callback(route_.callback, route_.methods)))
+                api_routes.append(ApiRoute(path, route_.methods, self._wrap_callback(route_.callback, route_.methods)))
+            self._api_routes = api_routes
 
-        return api_routes
+        return self._api_routes
 
     def _wrap_callback(self, callback, methods):
+        @wraps(callback)
         def wrapper(request, **path_args):
             # Determine the request and response types. Ensure API supports the requested types
             request_type = resolve_content_type(self.request_type_resolvers, request)
@@ -332,16 +343,17 @@ class ApiContainer(object):
         if options:
             raise TypeError("Got an unexpected keyword argument '{}'", options.keys()[-1])
 
-    def api_routes(self):
+    def api_routes(self, path_prefix=None):
         """
         Return all of the API routes defined the API endpoints in the container.
         """
-        path_prefix = self.path_prefix
+        if path_prefix is None:
+            path_prefix = self.path_prefix
 
         for endpoint in self.endpoints:
             endpoint.parent = self
             for api_route in endpoint.api_routes():
-                yield ApiRoute(chain(path_prefix, api_route.path), api_route.methods, api_route.callback)
+                yield ApiRoute(chain(path_prefix, api_route.path), *api_route[1:])
 
         if hasattr(self, 'additional_routes'):
             additional_routes = self.additional_routes
@@ -349,7 +361,7 @@ class ApiContainer(object):
                 additional_routes = additional_routes()
 
             for api_route in additional_routes:
-                yield ApiRoute(chain(path_prefix, api_route.path), api_route.methods, api_route.callback)
+                yield ApiRoute(chain(path_prefix, api_route.path), *api_route[1:])
 
 
 class ApiCollection(ApiContainer):
@@ -395,7 +407,7 @@ class ApiInterfaceBase(ApiContainer):
     def build_routes(self):
         parse_node = self.parse_node
         # Ensure URL's start with a slash
-        path_prefix = (self.url_prefix.rstrip('/ '), )
+        path_prefix = (self.url_prefix.rstrip('/'),)
 
         for api_route in self.api_routes():
             path = '/'.join(parse_node(p) for p in chain(path_prefix, api_route.path))
