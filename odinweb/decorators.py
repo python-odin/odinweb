@@ -5,7 +5,7 @@ Decorators
 A collection of decorators for identifying the various types of route.
 
 """
-from __future__ import absolute_import, unicode_literals
+from __future__ import absolute_import
 
 from collections import namedtuple
 from functools import wraps
@@ -20,7 +20,9 @@ __all__ = (
     # Handlers
     'list_response',
     # Shortcuts
-    'listing', 'create', 'detail', 'update', 'patch', 'delete', 'action', 'detail_action'
+    'listing', 'create', 'detail', 'update', 'patch', 'delete', 'action', 'detail_action',
+    # Docs
+    'operation_doc', 'parameter_doc', 'response_doc', 'get_docs'
 )
 
 # Counter used to order routes
@@ -96,6 +98,17 @@ def list_response(func=None, default_offset=0, default_limit=50):
 
     """
     def inner(f):
+        _apply_docs(f, parameters=[
+            {'name': 'offset',
+             'in': constants.IN_QUERY,
+             'type': constants.TYPE_INTEGER,
+             'default': default_offset},
+            {'name': 'limit',
+             'in': constants.IN_QUERY,
+             'type': constants.TYPE_INTEGER,
+             'default': default_limit},
+        ])
+
         @wraps(f)
         def wrapper(self, request, *args, **kwargs):
             # Get paging args from query string
@@ -109,6 +122,7 @@ def list_response(func=None, default_offset=0, default_limit=50):
                     total_count = None
                 return Listing(list(result), limit, offset, total_count)
         return wrapper
+
     return inner(func) if func else inner
 
 
@@ -195,3 +209,95 @@ def delete(func=None, resource=None):
 
     """
     return route(func, constants.PATH_TYPE_RESOURCE, constants.DELETE, resource)
+
+
+# Documentation methods
+
+def _apply_docs(c, **fields):
+    """
+    Apply documentation to a callback.
+    """
+    parameters = fields.pop('parameters', None)
+    responses = fields.pop('responses', None)
+
+    def inner(callback):
+        docs = getattr(callback, '_OdinWeb_docs', {})
+
+        if fields:
+            docs.update({k: v for k, v in fields.items() if v is not None})
+
+        if parameters:
+            # Ensure there are no duplicates
+            param_map = {}
+            for param in docs.get('parameters', []):
+                param_map[param['name'] + param['in']] = param
+
+            for param in parameters:
+                param_map[param['name'] + param['in']] = param
+
+            docs['parameters'] = param_map.values()
+
+        if responses:
+            docs.setdefault('responses', {}).update(responses)
+
+        setattr(callback, '_OdinWeb_docs', docs)
+        return callback
+
+    return inner(c) if c else inner
+
+
+def get_docs(callback):
+    # type (func) -> dict
+    """
+    Get any docs defined by documentation decorators
+    """
+    docs = getattr(callback, '_OdinWeb_docs', None) or {}
+    if callback.__doc__:
+        docs.setdefault('description', callback.__doc__.strip())
+    return docs
+
+
+def operation_doc(summary=None, tags=None, deprecated=None):
+    """
+    Decorator for applying operation documentation to a callback.
+
+    The values are based off `Swagger <https://swagger.io/specification>`_.
+
+    """
+    return _apply_docs(None, summary=summary, tags=tags, deprecated=deprecated)
+
+
+def parameter_doc(name, in_, description=None, required=None, type_=None, default=None):
+    """
+    Decorator for applying parameter documentation to a callback.
+
+    The values are based off `Swagger <https://swagger.io/specification>`_.
+
+    """
+    in_ = in_.title()
+
+    # Include all values that are defined.
+    parameter = {k: v for k, v in {
+        'name': name,
+        'in': in_,
+        'description': description,
+        'required': required or in_ == constants.IN_PATH,
+        'type': type_,
+        'default': default,
+    }.items() if v is not None}
+
+    return _apply_docs(None, parameters=[parameter])
+
+
+def response_doc(status, description, resource=None):
+    """
+    Define an expected responses.
+
+    The values are based off `Swagger <https://swagger.io/specification>`_.
+
+    """
+    return _apply_docs(None, responses={
+        status: {
+            'description': description,
+        }
+    })
