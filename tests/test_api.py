@@ -264,7 +264,7 @@ class TestResourceApi(object):
         assert result == {"a": "b", "c": "d"}
 
     @pytest.mark.parametrize('body, error_code', (
-        (bytes('\xFF'), 40099),  # Invalid UTF-8
+        (b'\xFF', 40099),  # Invalid UTF-8
         (None, 40096,),
         ('stuff', 40096),
         ('{"a":"b",}', 40096),
