@@ -274,8 +274,6 @@ def parameter_doc(name, in_, description=None, required=None, type_=None, defaul
     The values are based off `Swagger <https://swagger.io/specification>`_.
 
     """
-    in_ = in_.title()
-
     # Include all values that are defined.
     parameter = {k: v for k, v in {
         'name': name,
