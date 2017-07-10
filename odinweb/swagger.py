@@ -98,7 +98,7 @@ class SwaggerSpec(api.ResourceApi):
             'basePath': self.base_path,
             'info': {
                 'title': self.title,
-                'version': str(api_base.version)
+                'version': str(getattr(api_base, 'version', 0))
             },
             'paths': self.flatten_routes(api_base)
         }
