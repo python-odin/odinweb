@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import itertools
+import os
 
 from odin.utils import lazy_property
 
@@ -19,9 +20,10 @@ class SwaggerSpec(api.ResourceApi):
     """
     api_name = 'swagger'
 
-    def __init__(self, title):
+    def __init__(self, title, enable_ui=True):
         super(SwaggerSpec, self).__init__()
         self.title = title
+        self.enable_ui = enable_ui
 
     @lazy_property
     def base_path(self):
@@ -38,6 +40,10 @@ class SwaggerSpec(api.ResourceApi):
             parent = getattr(parent, 'parent', None)
 
         return '/' + '/'.join(itertools.chain.from_iterable(reversed(path)))
+
+    @property
+    def swagger_path(self):
+        return self.base_path + 'swagger'
 
     @staticmethod
     def generate_parameters(path):
@@ -102,3 +108,26 @@ class SwaggerSpec(api.ResourceApi):
             },
             'paths': self.flatten_routes(api_base)
         }
+
+    def serve_static(self, file_name):
+        if not self.enable_ui:
+            raise api.HttpError(404, 40401, "Not found")
+
+        static_path = os.path.join(os.path.dirname(__file__), 'static')
+        file_path = os.path.abspath(os.path.join(static_path, file_name))
+        if not file_path.startswith(static_path):
+            raise api.HttpError(404, 40401, "Not found")
+
+        try:
+            with open(file_path) as f:
+                return api.HttpResponse(f.read(), headers={'content-type': 'text/html'})
+        except:
+            raise api.HttpError(404, 40401, "Not found")
+
+    @api.route(sub_path=('ui',))
+    def get_ui(self, request):
+        return self.serve_static('ui.html')
+
+    @api.route(sub_path=('ui', api.PathNode('file_name', 'string', None)))
+    def get_static(self, request, file_name=None):
+        return self.serve_static(file_name)
