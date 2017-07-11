@@ -2,16 +2,70 @@
 import itertools
 import os
 
-from odin.utils import lazy_property
+from odin import fields
+from odin.utils import getmeta, lazy_property
 
 from odinweb import api
+from odinweb.constants import *
 
 DATA_TYPE_MAP = {
-    'int': api.TYPE_INTEGER,
-    'float': api.TYPE_NUMBER,
-    'str': api.TYPE_STRING,
-    'bool': api.TYPE_BOOLEAN
+    'int': Type.Integer,
+    'float': Type.Number,
+    'str': Type.String,
+    'bool': Type.Boolean,
 }
+
+
+SWAGGER_SPEC_TYPE_MAPPING = {
+    fields.IntegerField: Type.Integer,
+    fields.FloatField: Type.Number,
+    fields.BooleanField: Type.Boolean,
+}
+"""
+Mapping of fields to Swagger types.
+"""
+
+SWAGGER_SPEC_FORMAT_MAPPING = {
+    fields.StringField: '',
+    fields.IntegerField: 'int64',
+    fields.FloatField: 'float',
+    fields.BooleanField: '',
+    fields.DateField: 'date',
+    fields.DateTimeField: 'date-time',
+    fields.NaiveTimeField: 'date-time',
+}
+"""
+Mapping of fields to Swagger formats.
+"""
+
+
+def resource_definition(resource):
+    """
+    Generate a `Swagger Definitions Object <http://swagger.io/specification/#definitionsObject>`_
+    from a resource.
+
+    """
+    meta = getmeta(resource)
+
+    definition = {
+        'type': "object",
+        'properties': {}
+    }
+
+    for field in meta.all_fields:
+        field_definition = {
+            'type': SWAGGER_SPEC_TYPE_MAPPING.get(field, Type.String).value
+        }
+
+        if field in SWAGGER_SPEC_FORMAT_MAPPING:
+            field_definition['format'] = SWAGGER_SPEC_FORMAT_MAPPING[field]
+
+        if field.doc_text:
+            field_definition['description'] = field.doc_text
+
+        definition['properties'][field.name] = field_definition
+
+    return definition
 
 
 class SwaggerSpec(api.ResourceApi):
@@ -43,7 +97,7 @@ class SwaggerSpec(api.ResourceApi):
 
     @property
     def swagger_path(self):
-        return self.base_path + 'swagger'
+        return self.base_path + '/swagger'
 
     @staticmethod
     def generate_parameters(path):
@@ -52,8 +106,8 @@ class SwaggerSpec(api.ResourceApi):
             if isinstance(node, api.PathNode):
                 parameters.append({
                     'name': node.name,
-                    'in': api.IN_PATH,
-                    'type': DATA_TYPE_MAP.get(node.type, api.TYPE_STRING),
+                    'in': api.In.Path.value,
+                    'type': DATA_TYPE_MAP.get(node.type, Type.String).value,
                     'required': True
                 })
         return parameters
@@ -89,6 +143,12 @@ class SwaggerSpec(api.ResourceApi):
 
         return paths
 
+    def resource_definitions(self, api_base):
+        return {
+            getmeta(resource).name: resource_definition(resource)
+            for resource in api_base.referenced_resources()
+        }
+
     @api.route
     def get_swagger(self, request):
         """
@@ -99,15 +159,17 @@ class SwaggerSpec(api.ResourceApi):
             raise api.HttpError(404, 40442, "Swagger not available.",
                                 "Swagger API is detached from a parent container.")
 
-        return {
+        result = {
             'swagger': '2.0',
             'basePath': self.base_path,
             'info': {
                 'title': self.title,
                 'version': str(getattr(api_base, 'version', 0))
             },
-            'paths': self.flatten_routes(api_base)
+            'paths': self.flatten_routes(api_base),
+            'definitions': self.resource_definitions(api_base)
         }
+        return result
 
     def serve_static(self, file_name):
         if not self.enable_ui:
@@ -118,11 +180,16 @@ class SwaggerSpec(api.ResourceApi):
         if not file_path.startswith(static_path):
             raise api.HttpError(404, 40401, "Not found")
 
+        # Read UTF-8
         try:
-            with open(file_path) as f:
-                return api.HttpResponse(f.read(), headers={'content-type': 'text/html'})
-        except:
+            content = open(file_path).read().decode('UTF8')
+        except OSError:
             raise api.HttpError(404, 40401, "Not found")
+
+        return api.HttpResponse(
+            content.replace(u"{{SWAGGER_PATH}}", self.swagger_path),
+            headers={'content-type': 'text/html'}
+        )
 
     @api.route(sub_path=('ui',))
     def get_ui(self, request):
