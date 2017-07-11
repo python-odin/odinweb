@@ -18,6 +18,7 @@ except ImportError:
     from urllib2 import URLError
     from urlparse import parse_qs, urlparse
 
+from ._compat import *
 from .utils import random_string
 
 DEFAULT_DIGEST = hashlib.sha256

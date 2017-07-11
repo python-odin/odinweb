@@ -6,6 +6,7 @@ from odin import fields
 from odin.utils import getmeta, lazy_property
 
 from odinweb import api
+from odinweb._compat import *
 from odinweb.constants import *
 
 DATA_TYPE_MAP = {
@@ -136,12 +137,11 @@ class SwaggerSpec(api.ResourceApi):
                 path_spec['parameters'] = parameters
 
             # Generate operation spec
-            operation_spec = api.get_docs(api_route.callback)
-            operation_spec.setdefault('operationId', api_route.callback.__name__)
+            docs = api.OperationDoc.get(api_route.callback)
 
             # Add methods
             for method in api_route.methods:
-                path_spec[method.lower()] = operation_spec
+                path_spec[method.lower()] = docs.to_dict()
 
         return paths
 
@@ -152,8 +152,8 @@ class SwaggerSpec(api.ResourceApi):
         }
 
     @api.route
-    @api.operation_doc(tags=('swagger-ui',))
-    @api.response_doc(200, "Swagger JSON of this API")
+    @api.operation(tags=('swagger-ui',))
+    @api.response(200, "Swagger JSON of this API")
     def get_swagger(self, request):
         """
         Generate this document.
@@ -185,25 +185,28 @@ class SwaggerSpec(api.ResourceApi):
             raise api.HttpError(404, 40401, "Not found")
 
         try:
-            return open(file_path).read()
+            return open(file_path, 'rb').read()
         except OSError:
             raise api.HttpError(404, 40401, "Not found")
 
     @api.route(sub_path=('ui',))
-    @api.operation_doc(tags=('swagger-ui',))
-    @api.response_doc(200, "HTML content")
+    @api.operation(tags=('swagger-ui',))
+    @api.response(200, "HTML content")
+    @api.produces('text/html')
     def get_ui(self, request):
         """
         Load the Swagger UI interface
         """
         if not self._ui_cache:
-            content = self.load_static('ui.html').decode('UTF-8')
+            content = self.load_static('ui.html')
+            if isinstance(content, binary_type):
+                content = content.decode('UTF-8')
             self._ui_cache = content.replace(u"{{SWAGGER_PATH}}", self.swagger_path)
         return api.HttpResponse(self._ui_cache, headers={'ContentType': 'text/html'})
 
     @api.route(sub_path=('ui', api.PathNode('file_name', 'string', None)))
-    @api.operation_doc(tags=('swagger-ui',))
-    @api.response_doc(200, "HTML content")
+    @api.operation(tags=('swagger-ui',))
+    @api.response(200, "HTML content")
     def get_static(self, request, file_name=None):
         """
         Get static content for UI.

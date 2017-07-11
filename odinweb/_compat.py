@@ -30,7 +30,7 @@ else:
     integer_types = int,
     text_type = str
     binary_type = bytes
-
+    range = range
 
 def with_metaclass(meta, *bases):
     """Create a base class with a metaclass."""

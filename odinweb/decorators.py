@@ -22,7 +22,7 @@ __all__ = (
     # Shortcuts
     'listing', 'create', 'detail', 'update', 'patch', 'delete', 'action', 'detail_action',
     # Docs
-    'operation_doc', 'parameter_doc', 'response_doc', 'get_docs'
+    'OperationDoc', 'operation', 'parameter', 'response', 'produces'
 )
 
 # Counter used to order routes
@@ -98,23 +98,13 @@ def list_response(func=None, max_offset=None, default_offset=0, max_limit=None, 
 
     """
     def inner(f):
-        _apply_docs(f, parameters=[
-            {'name': 'offset',
-             'in': In.Query.value,
-             'type': Type.Integer.value,
-             'default': default_offset,
-             'description': 'Offset to start returning records.'},
-            {'name': 'limit',
-             'in': In.Query.value,
-             'type': Type.Integer.value,
-             'default': default_limit,
-             'description': 'Limit of records to return.'},
-            {'name': 'bare',
-             'in': In.Query.value,
-             'type': Type.Boolean.value,
-             'default': False,
-             'description': 'Return a bare response with no paging container.'},
-        ])
+        docs = OperationDoc.get(f)
+        docs.add_parameter('offset', In.Query.value, type=Type.Integer.value, default=default_offset,
+                           desciption='Offset to start returning records.')
+        docs.add_parameter('limit', In.Query.value, type=Type.Integer.value, default=default_limit,
+                           desciption='Limit of records to return.')
+        docs.add_parameter('bare', In.Query.value, type=Type.Boolean.value, default=False,
+                           desciption='Return a bare response with no paging container.')
 
         @wraps(f)
         def wrapper(self, request, *args, **kwargs):
@@ -243,7 +233,7 @@ class OperationDoc(object):
         self.callback = callback
         self.summary = None
         self.deprecated = False
-        self.tags = []
+        self.tags = set()
         self._parameters = {}
         self.responses = {
             'default': {
@@ -254,34 +244,60 @@ class OperationDoc(object):
 
     def add_parameter(self, name, in_, **options):
         # Ensure there are no duplicates
-        parameter = self._parameters.setdefault(name + in_.value, {})
-        parameter['name'] = name
-        parameter['in'] = in_
-        parameter.update(options)
+        param = self._parameters.setdefault(name + in_, {})
+        param['name'] = name
+        param['in'] = in_
+        param.update(o for o in options.items() if o[1] is not None)
 
     def add_response(self, status, description):
-        pass
+        self.responses[status] = {
+            'description': description
+        }
 
     @property
     def parameters(self):
-        return self._parameters.values()
+        return list(self._parameters.values())
 
     @property
     def description(self):
         return self.callback.__doc__.strip()
 
+    def to_dict(self):
+        d = {
+            "operationId": self.callback.__name__,
+            "description": (self.callback.__doc__ or '').strip(),
+        }
+        if self.deprecated:
+            d['deprecated'] = True
+        if self.produces:
+            d['produces'] = list(self.produces)
+        if self.tags:
+            d['tags'] = list(self.tags)
+        if self.responses:
+            d['responses'] = self.responses
+        if self.parameters:
+            d['parameters'] = self.parameters
 
-def operation_doc(summary=None, tags=None, deprecated=None):
+        return d
+
+
+def operation(summary=None, tags=None, deprecated=False):
     """
     Decorator for applying operation documentation to a callback.
 
     The values are based off `Swagger <https://swagger.io/specification>`_.
 
     """
-    return _apply_docs(None, summary=summary, tags=tags, deprecated=deprecated)
+    def inner(func):
+        docs = OperationDoc.get(func)
+        docs.summary = summary
+        docs.tags.update(tags)
+        docs.deprecated = deprecated
+        return func
+    return inner
 
 
-def parameter_doc(name, in_, description=None, required=None, type_=None, default=None):
+def parameter(name, in_, description=None, required=None, type_=None, default=None):
     """
     Decorator for applying parameter documentation to a callback.
 
@@ -291,35 +307,34 @@ def parameter_doc(name, in_, description=None, required=None, type_=None, defaul
     if in_ not in In:
         raise ValueError("In parameter not a valid value.")
 
-    # Include all values that are defined.
-    parameter = {k: v for k, v in {
-        'name': name,
-        'in': in_.value,
-        'description': description,
-        'required': required or in_ == In.Path,
-        'type': type_.value,
-        'default': default,
-    }.items() if v is not None}
-
-    return _apply_docs(None, parameters=[parameter])
+    def inner(func):
+        OperationDoc.get(func).add_parameter(name, in_.value, description=description,
+                                             required=required, type=type_.value, default=default)
+        return func
+    return inner
 
 
-def response_doc(status, description, resource=None):
+def response(status, description, resource=None):
     """
     Define an expected responses.
 
     The values are based off `Swagger <https://swagger.io/specification>`_.
 
     """
-    return _apply_docs(None, responses={
-        status: {
-            'description': description,
-        }
-    })
+    def inner(func):
+        OperationDoc.get(func).add_response(status, description)
+        return func
+    return inner
 
 
 def produces(*content_types):
     """
     Define content types produced by an endpoint.
     """
-    pass
+    if not all(isinstance(content_type, _compat.string_types) for content_type in content_types):
+        raise ValueError("In parameter not a valid value.")
+
+    def inner(func):
+        OperationDoc.get(func).produces.update(content_types)
+        return func
+    return inner
