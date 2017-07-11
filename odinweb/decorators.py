@@ -99,12 +99,9 @@ def list_response(func=None, max_offset=None, default_offset=0, max_limit=None, 
     """
     def inner(f):
         docs = OperationDoc.get(f)
-        docs.add_parameter('offset', In.Query.value, type=Type.Integer.value, default=default_offset,
-                           desciption='Offset to start returning records.')
-        docs.add_parameter('limit', In.Query.value, type=Type.Integer.value, default=default_limit,
-                           desciption='Limit of records to return.')
-        docs.add_parameter('bare', In.Query.value, type=Type.Boolean.value, default=False,
-                           desciption='Return a bare response with no paging container.')
+        docs.add_parameter('offset', In.Query.value, type=Type.Integer.value, default=default_offset)
+        docs.add_parameter('limit', In.Query.value, type=Type.Integer.value, default=default_limit)
+        docs.add_parameter('bare', In.Query.value, type=Type.Boolean.value, default=False)
 
         @wraps(f)
         def wrapper(self, request, *args, **kwargs):
@@ -133,7 +130,7 @@ def list_response(func=None, max_offset=None, default_offset=0, max_limit=None, 
 
 # Shortcut methods
 
-def listing(func=None, resource=None, default_offset=0, default_limit=50):
+def listing(func=None, resource=Listing, default_offset=0, default_limit=50):
     """
     Decorator to indicate a listing endpoint.
 
@@ -297,7 +294,7 @@ def operation(summary=None, tags=None, deprecated=False):
     return inner
 
 
-def parameter(name, in_, description=None, required=None, type_=None, default=None):
+def parameter(name, in_, required=None, type_=None, default=None):
     """
     Decorator for applying parameter documentation to a callback.
 
@@ -308,8 +305,7 @@ def parameter(name, in_, description=None, required=None, type_=None, default=No
         raise ValueError("In parameter not a valid value.")
 
     def inner(func):
-        OperationDoc.get(func).add_parameter(name, in_.value, description=description,
-                                             required=required, type=type_.value, default=default)
+        OperationDoc.get(func).add_parameter(name, in_.value, required=required, type=type_.value, default=default)
         return func
     return inner
 
