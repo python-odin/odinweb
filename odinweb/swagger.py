@@ -79,6 +79,8 @@ class SwaggerSpec(api.ResourceApi):
         self.title = title
         self.enable_ui = enable_ui
 
+        self._ui_cache = None
+
     @lazy_property
     def base_path(self):
         """
@@ -150,6 +152,8 @@ class SwaggerSpec(api.ResourceApi):
         }
 
     @api.route
+    @api.operation_doc(tags=('swagger-ui',))
+    @api.response_doc(200, "Swagger JSON of this API")
     def get_swagger(self, request):
         """
         Generate this document.
@@ -171,7 +175,7 @@ class SwaggerSpec(api.ResourceApi):
         }
         return result
 
-    def serve_static(self, file_name):
+    def load_static(self, file_name):
         if not self.enable_ui:
             raise api.HttpError(404, 40401, "Not found")
 
@@ -180,21 +184,39 @@ class SwaggerSpec(api.ResourceApi):
         if not file_path.startswith(static_path):
             raise api.HttpError(404, 40401, "Not found")
 
-        # Read UTF-8
         try:
-            content = open(file_path).read().decode('UTF8')
+            return open(file_path).read()
         except OSError:
             raise api.HttpError(404, 40401, "Not found")
 
-        return api.HttpResponse(
-            content.replace(u"{{SWAGGER_PATH}}", self.swagger_path),
-            headers={'content-type': 'text/html'}
-        )
-
     @api.route(sub_path=('ui',))
+    @api.operation_doc(tags=('swagger-ui',))
+    @api.response_doc(200, "HTML content")
     def get_ui(self, request):
-        return self.serve_static('ui.html')
+        """
+        Load the Swagger UI interface
+        """
+        if not self._ui_cache:
+            content = self.load_static('ui.html').decode('UTF-8')
+            self._ui_cache = content.replace(u"{{SWAGGER_PATH}}", self.swagger_path)
+        return api.HttpResponse(self._ui_cache, headers={'ContentType': 'text/html'})
 
     @api.route(sub_path=('ui', api.PathNode('file_name', 'string', None)))
+    @api.operation_doc(tags=('swagger-ui',))
+    @api.response_doc(200, "HTML content")
     def get_static(self, request, file_name=None):
-        return self.serve_static(file_name)
+        """
+        Get static content for UI.
+        """
+        content_type = {
+            'ss': 'text/css',
+            'js': 'application/javascript',
+        }.get(file_name[-2:])
+        if not content_type:
+            raise api.ImmediateHttpResponse("Not Found", 404)
+
+        return api.HttpResponse(self.load_static(file_name), headers={
+            'Content-Type': content_type,
+            'Content-Encoding': 'gzip',
+            'Cache-Control': 'public, max-age=300',
+        })

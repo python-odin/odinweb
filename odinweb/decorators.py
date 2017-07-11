@@ -228,48 +228,47 @@ def delete(func=None, resource=None):
 
 # Documentation methods
 
-def _apply_docs(c, **fields):
-    """
-    Apply documentation to a callback.
-    """
-    parameters = fields.pop('parameters', None)
-    responses = fields.pop('responses', None)
+class OperationDoc(object):
+    @classmethod
+    def get(cls, func):
+        docs = getattr(func, '_api_docs', None)
+        if docs is None:
+            docs = cls(func)
+            setattr(func, '_api_docs', docs)
+        return docs
 
-    def inner(callback):
-        docs = getattr(callback, '_OdinWeb_docs', {})
+    __slots__ = 'callback _parameters summary deprecated tags responses produces'.split()
 
-        if fields:
-            docs.update({k: v for k, v in fields.items() if v is not None})
+    def __init__(self, callback):
+        self.callback = callback
+        self.summary = None
+        self.deprecated = False
+        self.tags = []
+        self._parameters = {}
+        self.responses = {
+            'default': {
+                'description': 'Return an error'
+            }
+        }
+        self.produces = set()
 
-        if parameters:
-            # Ensure there are no duplicates
-            param_map = {}
-            for param in docs.get('parameters', []):
-                param_map[param['name'] + param['in']] = param
+    def add_parameter(self, name, in_, **options):
+        # Ensure there are no duplicates
+        parameter = self._parameters.setdefault(name + in_.value, {})
+        parameter['name'] = name
+        parameter['in'] = in_
+        parameter.update(options)
 
-            for param in parameters:
-                param_map[param['name'] + param['in']] = param
+    def add_response(self, status, description):
+        pass
 
-            docs['parameters'] = param_map.values()
+    @property
+    def parameters(self):
+        return self._parameters.values()
 
-        if responses:
-            docs.setdefault('responses', {}).update(responses)
-
-        setattr(callback, '_api_docs', docs)
-        return callback
-
-    return inner(c) if c else inner
-
-
-def get_docs(callback):
-    # type (func) -> dict
-    """
-    Get any docs defined by documentation decorators
-    """
-    docs = getattr(callback, '_api_docs', None) or {}
-    if callback.__doc__:
-        docs.setdefault('description', callback.__doc__.strip())
-    return docs
+    @property
+    def description(self):
+        return self.callback.__doc__.strip()
 
 
 def operation_doc(summary=None, tags=None, deprecated=None):
@@ -317,3 +316,10 @@ def response_doc(status, description, resource=None):
             'description': description,
         }
     })
+
+
+def produces(*content_types):
+    """
+    Define content types produced by an endpoint.
+    """
+    pass
