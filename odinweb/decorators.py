@@ -100,18 +100,18 @@ def list_response(func=None, max_offset=None, default_offset=0, max_limit=None, 
     def inner(f):
         _apply_docs(f, parameters=[
             {'name': 'offset',
-             'in': In.Query,
-             'type': Type.Integer,
+             'in': In.Query.value,
+             'type': Type.Integer.value,
              'default': default_offset,
              'description': 'Offset to start returning records.'},
             {'name': 'limit',
-             'in': In.Query,
-             'type': Type.Integer,
+             'in': In.Query.value,
+             'type': Type.Integer.value,
              'default': default_limit,
              'description': 'Limit of records to return.'},
             {'name': 'bare',
-             'in': In.Query,
-             'type': Type.Boolean,
+             'in': In.Query.value,
+             'type': Type.Boolean.value,
              'default': False,
              'description': 'Return a bare response with no paging container.'},
         ])
@@ -245,10 +245,10 @@ def _apply_docs(c, **fields):
             # Ensure there are no duplicates
             param_map = {}
             for param in docs.get('parameters', []):
-                param_map[param['name'] + param['in'].value] = param
+                param_map[param['name'] + param['in']] = param
 
             for param in parameters:
-                param_map[param['name'] + param['in'].value] = param
+                param_map[param['name'] + param['in']] = param
 
             docs['parameters'] = param_map.values()
 
@@ -295,10 +295,10 @@ def parameter_doc(name, in_, description=None, required=None, type_=None, defaul
     # Include all values that are defined.
     parameter = {k: v for k, v in {
         'name': name,
-        'in': in_.value(),
+        'in': in_.value,
         'description': description,
         'required': required or in_ == In.Path,
-        'type': type_,
+        'type': type_.value,
         'default': default,
     }.items() if v is not None}
 
