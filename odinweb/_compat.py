@@ -18,21 +18,18 @@ __all__ = (
 PY2 = sys.version_info[0] == 2
 PY3 = sys.version_info[0] == 3
 
-if PY3:
-    string_types = str,
-    integer_types = int,
-    text_type = str
-    binary_type = bytes
-else:
+if PY2:
     string_types = basestring,
     integer_types = (int, long)
     text_type = unicode
     binary_type = str
 
-if PY2:
     range = xrange
 else:
-    range = range
+    string_types = str,
+    integer_types = int,
+    text_type = str
+    binary_type = bytes
 
 
 def with_metaclass(meta, *bases):

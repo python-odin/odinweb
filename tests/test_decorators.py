@@ -1,18 +1,18 @@
 import pytest
 
 from odinweb import decorators
-from odinweb import constants
+from odinweb.constants import *
 
 
 @pytest.mark.parametrize('decorator,definition', (
-    (decorators.route, (constants.PATH_TYPE_COLLECTION, (constants.GET,), None)),
-    (decorators.resource_route, (constants.PATH_TYPE_RESOURCE, (constants.GET,), None)),
-    (decorators.listing, (constants.PATH_TYPE_COLLECTION, (constants.GET,), None)),
-    (decorators.create, (constants.PATH_TYPE_COLLECTION, (constants.POST,), None)),
-    (decorators.detail, (constants.PATH_TYPE_RESOURCE, (constants.GET,), None)),
-    (decorators.update, (constants.PATH_TYPE_RESOURCE, (constants.PUT,), None)),
-    (decorators.patch, (constants.PATH_TYPE_RESOURCE, (constants.PATCH,), None)),
-    (decorators.delete, (constants.PATH_TYPE_RESOURCE, (constants.DELETE,), None)),
+    (decorators.route, (PathType.Collection, (GET,), None)),
+    (decorators.resource_route, (PathType.Resource, (GET,), None)),
+    (decorators.listing, (PathType.Collection, (GET,), None)),
+    (decorators.create, (PathType.Collection, (POST,), None)),
+    (decorators.detail, (PathType.Resource, (GET,), None)),
+    (decorators.update, (PathType.Resource, (PUT,), None)),
+    (decorators.patch, (PathType.Resource, (PATCH,), None)),
+    (decorators.delete, (PathType.Resource, (DELETE,), None)),
 ))
 def test_endpoint_decorators(decorator, definition):
     @decorator

@@ -163,7 +163,7 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
             api_routes = []
             for route_ in self._routes:
                 path = [self.api_name]
-                if route_.path_type == PATH_TYPE_RESOURCE:
+                if route_.path_type == PathType.Resource:
                     path.append(PathNode(self.resource_id_name, self.resource_id_type, None))
                 if route_.sub_path:
                     path += route_.sub_path
@@ -362,6 +362,28 @@ class ApiContainer(object):
 
             for api_route in additional_routes:
                 yield ApiRoute(chain(path_prefix, api_route.path), *api_route[1:])
+
+    def referenced_resources(self):
+        # type: () -> set
+        """
+        Return a set of resources referenced by the API.
+        """
+        resources = set()
+        for endpoint in self.endpoints:
+            if isinstance(endpoint, ResourceApi):
+                # Add ResourceApi resource
+                if endpoint.resource:
+                    resources.add(endpoint.resource)
+
+                # Add any route specific resources
+                for api_route in endpoint.api_routes():
+                    if api_route.callback.resource:
+                        resources.add(api_route.callback.resource)
+
+            elif isinstance(endpoint, ApiContainer):
+                resources.update(endpoint.referenced_resources())
+
+        return resources
 
 
 class ApiCollection(ApiContainer):

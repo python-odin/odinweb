@@ -1,3 +1,6 @@
+import enum
+
+
 # Well known methods
 GET = 'GET'
 HEAD = 'HEAD'
@@ -7,21 +10,27 @@ PATCH = 'PATCH'
 DELETE = 'DELETE'
 OPTIONS = 'OPTIONS'
 
+
 # Type of path
-PATH_TYPE_COLLECTION = 'collection'
-PATH_TYPE_RESOURCE = 'resource'
+class PathType(enum.Enum):
+    Collection = 'collection'
+    Resource = 'resource'
+
 
 # Parameter location
-IN_PATH = 'path'
-IN_QUERY = 'query'
-IN_HEADER = 'header'
-IN_BODY = 'body'
-IN_FORM = 'formData'
+class In(enum.Enum):
+    Path = 'path'
+    Query = 'query'
+    Header = 'header'
+    Body = 'body'
+    Form = 'formData'
+
 
 # Data-types
-TYPE_STRING = "string"
-TYPE_NUMBER = "number"
-TYPE_INTEGER = "integer"
-TYPE_BOOLEAN = "boolean"
-TYPE_ARRAY = "array"
-TYPE_FILE = "file"
+class Type(enum.Enum):
+    String = "string"
+    Number = "number"
+    Integer = "integer"
+    Boolean = "boolean"
+    Array = "array"
+    File = "file"

@@ -2,10 +2,13 @@ from __future__ import absolute_import
 
 import pytest
 import mock
-from odin.codecs import json_codec
 
+from odin.codecs import json_codec
 from odin.exceptions import ValidationError, CodecDecodeError
+
 from odinweb import api, decorators
+from odinweb.constants import *
+
 from .resources import User
 
 
@@ -14,10 +17,9 @@ def flatten_routes(api_routes):
     Remove any iterators for easy comparisons in assert statements.
     """
     def flatten(api_route):
-        path, methods, callback = api_route
         return api.ApiRoute(
-            ["<%s>" % p.name if isinstance(p, api.PathNode) else p for p in path],
-            methods, callback
+            ["<%s>" % p.name if isinstance(p, api.PathNode) else p for p in api_route.path],
+            *api_route[1:]
         )
 
     return [flatten(r) for r in api_routes]
@@ -108,9 +110,9 @@ class TestResourceApiMeta(object):
                 pass
 
         assert ExampleApi._routes == [
-            decorators.RouteDefinition(0, 'collection', ('GET',), None, ExampleApi.__dict__['list_items']),
-            decorators.RouteDefinition(1, 'resource', ('GET',), None, ExampleApi.__dict__['get_item']),
-            decorators.RouteDefinition(2, 'collection', ('POST', 'PUT'), None, ExampleApi.__dict__['create_item']),
+            decorators.RouteDefinition(0, PathType.Collection, ('GET',), None, ExampleApi.__dict__['list_items']),
+            decorators.RouteDefinition(1, PathType.Resource, ('GET',), None, ExampleApi.__dict__['get_item']),
+            decorators.RouteDefinition(2, PathType.Collection, ('POST', 'PUT'), None, ExampleApi.__dict__['create_item']),
         ]
 
     def test_sub_classed_api(self, mocker):
@@ -131,9 +133,9 @@ class TestResourceApiMeta(object):
                 pass
 
         assert SubApi._routes == [
-            decorators.RouteDefinition(0, 'collection', ('GET',), None, SuperApi.__dict__['list_items']),
-            decorators.RouteDefinition(1, 'resource', ('GET',), None, SubApi.__dict__['get_item']),
-            decorators.RouteDefinition(2, 'collection', ('POST', 'PUT'), None, SubApi.__dict__['create_item']),
+            decorators.RouteDefinition(0, PathType.Collection, ('GET',), None, SuperApi.__dict__['list_items']),
+            decorators.RouteDefinition(1, PathType.Resource, ('GET',), None, SubApi.__dict__['get_item']),
+            decorators.RouteDefinition(2, PathType.Collection, ('POST', 'PUT'), None, SubApi.__dict__['create_item']),
         ]
 
 

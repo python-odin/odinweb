@@ -11,7 +11,7 @@ from collections import namedtuple
 from functools import wraps
 
 from . import _compat
-from . import constants
+from .constants import *
 from .resources import Listing
 
 __all__ = (
@@ -29,10 +29,10 @@ __all__ = (
 _route_count = 0
 
 # Definition of a route bound to a class method
-RouteDefinition = namedtuple("RouteDefinition", ('route_number', 'path_type', 'methods', 'sub_path', 'callback'))
+RouteDefinition = namedtuple("RouteDefinition", 'route_number path_type methods sub_path callback')
 
 
-def route(func=None, path_type=constants.PATH_TYPE_COLLECTION, methods=constants.GET, resource=None, sub_path=None):
+def route(func=None, path_type=PathType.Collection, methods=GET, resource=None, sub_path=None):
     """
     Decorator for defining an API route. Usually one of the helpers (listing, detail, update, delete) would be
     used in place of the route decorator.
@@ -81,15 +81,15 @@ def route(func=None, path_type=constants.PATH_TYPE_COLLECTION, methods=constants
 collection = collection_action = action = route
 
 
-def resource_route(func=None, method=constants.GET, resource=None, sub_path=None):
-    return route(func, constants.PATH_TYPE_RESOURCE, method, resource, sub_path)
+def resource_route(func=None, method=GET, resource=None, sub_path=None):
+    return route(func, PathType.Resource, method, resource, sub_path)
 
 resource_action = detail_action = resource_route
 
 
 # Handlers
 
-def list_response(func=None, default_offset=0, default_limit=50):
+def list_response(func=None, max_offset=None, default_offset=0, max_limit=None, default_limit=50):
     """
     Handle processing a list. It is assumed decorator will operate on a class.
 
@@ -100,27 +100,42 @@ def list_response(func=None, default_offset=0, default_limit=50):
     def inner(f):
         _apply_docs(f, parameters=[
             {'name': 'offset',
-             'in': constants.IN_QUERY,
-             'type': constants.TYPE_INTEGER,
-             'default': default_offset},
+             'in': In.Query,
+             'type': Type.Integer,
+             'default': default_offset,
+             'description': 'Offset to start returning records.'},
             {'name': 'limit',
-             'in': constants.IN_QUERY,
-             'type': constants.TYPE_INTEGER,
-             'default': default_limit},
+             'in': In.Query,
+             'type': Type.Integer,
+             'default': default_limit,
+             'description': 'Limit of records to return.'},
+            {'name': 'bare',
+             'in': In.Query,
+             'type': Type.Boolean,
+             'default': False,
+             'description': 'Return a bare response with no paging container.'},
         ])
 
         @wraps(f)
         def wrapper(self, request, *args, **kwargs):
             # Get paging args from query string
             offset = kwargs['offset'] = int(request.GET.get('offset', default_offset))
+            if max_offset and offset > max_offset:
+                offset = kwargs['offset'] = max_offset
+
             limit = kwargs['limit'] = int(request.GET.get('limit', default_limit))
+            if max_limit and limit > max_limit:
+                limit = kwargs['limit'] = max_limit
+
+            bare = bool(request.GET.get('bare', False))
             result = f(self, request, *args, **kwargs)
             if result is not None:
                 if isinstance(result, tuple) and len(result) == 2:
                     result, total_count = result
                 else:
                     total_count = None
-                return Listing(list(result), limit, offset, total_count)
+
+                return result if bare else Listing(result, limit, offset, total_count)
         return wrapper
 
     return inner(func) if func else inner
@@ -142,7 +157,7 @@ def listing(func=None, resource=None, default_offset=0, default_limit=50):
     """
     return route(
         list_response(func, default_offset, default_limit),
-        constants.PATH_TYPE_COLLECTION, constants.GET, resource
+        PathType.Collection, GET, resource
     )
 
 
@@ -156,7 +171,7 @@ def create(func=None, resource=None):
         instance.
 
     """
-    return route(func, constants.PATH_TYPE_COLLECTION, constants.POST, resource)
+    return route(func, PathType.Collection, POST, resource)
 
 
 def detail(func=None, resource=None):
@@ -169,7 +184,7 @@ def detail(func=None, resource=None):
         instance.
 
     """
-    return route(func, constants.PATH_TYPE_RESOURCE, constants.GET, resource)
+    return route(func, PathType.Resource, GET, resource)
 
 
 def update(func=None, resource=None):
@@ -182,7 +197,7 @@ def update(func=None, resource=None):
         instance.
 
     """
-    return route(func, constants.PATH_TYPE_RESOURCE, constants.PUT, resource)
+    return route(func, PathType.Resource, PUT, resource)
 
 
 def patch(func=None, resource=None):
@@ -195,7 +210,7 @@ def patch(func=None, resource=None):
         instance.
 
     """
-    return route(func, constants.PATH_TYPE_RESOURCE, constants.PATCH, resource)
+    return route(func, PathType.Resource, PATCH, resource)
 
 
 def delete(func=None, resource=None):
@@ -208,7 +223,7 @@ def delete(func=None, resource=None):
         instance.
 
     """
-    return route(func, constants.PATH_TYPE_RESOURCE, constants.DELETE, resource)
+    return route(func, PathType.Resource, DELETE, resource)
 
 
 # Documentation methods
@@ -230,17 +245,17 @@ def _apply_docs(c, **fields):
             # Ensure there are no duplicates
             param_map = {}
             for param in docs.get('parameters', []):
-                param_map[param['name'] + param['in']] = param
+                param_map[param['name'] + param['in'].value] = param
 
             for param in parameters:
-                param_map[param['name'] + param['in']] = param
+                param_map[param['name'] + param['in'].value] = param
 
             docs['parameters'] = param_map.values()
 
         if responses:
             docs.setdefault('responses', {}).update(responses)
 
-        setattr(callback, '_OdinWeb_docs', docs)
+        setattr(callback, '_api_docs', docs)
         return callback
 
     return inner(c) if c else inner
@@ -251,7 +266,7 @@ def get_docs(callback):
     """
     Get any docs defined by documentation decorators
     """
-    docs = getattr(callback, '_OdinWeb_docs', None) or {}
+    docs = getattr(callback, '_api_docs', None) or {}
     if callback.__doc__:
         docs.setdefault('description', callback.__doc__.strip())
     return docs
@@ -274,12 +289,15 @@ def parameter_doc(name, in_, description=None, required=None, type_=None, defaul
     The values are based off `Swagger <https://swagger.io/specification>`_.
 
     """
+    if in_ not in In:
+        raise ValueError("In parameter not a valid value.")
+
     # Include all values that are defined.
     parameter = {k: v for k, v in {
         'name': name,
-        'in': in_,
+        'in': in_.value(),
         'description': description,
-        'required': required or in_ == constants.IN_PATH,
+        'required': required or in_ == In.Path,
         'type': type_,
         'default': default,
     }.items() if v is not None}

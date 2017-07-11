@@ -2,10 +2,11 @@ from collections import namedtuple
 
 
 # Used to define path nodes
-PathNode = namedtuple('PathNode', ('name', 'type', 'type_args'))
+PathNode = namedtuple('PathNode', 'name type type_args')
+PathNode.__new__.__defaults__ = (None, None, None)
 
 # Generic definition for a route to an API endpoint
-ApiRoute = namedtuple("ApiRoute", ('path', 'methods', 'callback'))
+ApiRoute = namedtuple("ApiRoute", 'path methods callback')
 
 
 class HttpResponse(object):
