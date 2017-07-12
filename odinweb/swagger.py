@@ -5,7 +5,8 @@ import os
 from odin import fields
 from odin.utils import getmeta, lazy_property
 
-from odinweb import api
+from odinweb import api, doc
+from odinweb import resources
 from odinweb._compat import *
 from odinweb.constants import *
 
@@ -55,7 +56,7 @@ def resource_definition(resource):
 
     for field in meta.all_fields:
         field_definition = {
-            'type': SWAGGER_SPEC_TYPE_MAPPING.get(field, Type.String).value
+            'type': SWAGGER_SPEC_TYPE_MAPPING.get(field.__class__, Type.String).value
         }
 
         if field in SWAGGER_SPEC_FORMAT_MAPPING:
@@ -137,7 +138,7 @@ class SwaggerSpec(api.ResourceApi):
                 path_spec['parameters'] = parameters
 
             # Generate operation spec
-            docs = api.OperationDoc.get(api_route.callback)
+            docs = doc.OperationDoc.get(api_route.callback)
 
             # Add methods
             for method in api_route.methods:
@@ -146,14 +147,19 @@ class SwaggerSpec(api.ResourceApi):
         return paths
 
     def resource_definitions(self, api_base):
-        return {
-            getmeta(resource).name: resource_definition(resource)
-            for resource in api_base.referenced_resources()
+        definitions = {
+            getmeta(resources.Error).resource_name: resource_definition(resources.Error),
+            getmeta(resources.Listing).resource_name: resource_definition(resources.Listing),
         }
+        definitions.update({
+            getmeta(resource).resource_name: resource_definition(resource)
+            for resource in api_base.referenced_resources()
+        })
+        return definitions
 
     @api.route
-    @api.operation(tags=('swagger-ui',))
-    @api.response(200, "Swagger JSON of this API")
+    @doc.operation(tags=('swagger-ui',))
+    @doc.response(200, "Swagger JSON of this API")
     def get_swagger(self, request):
         """
         Generate this document.
@@ -190,9 +196,9 @@ class SwaggerSpec(api.ResourceApi):
             raise api.HttpError(404, 40401, "Not found")
 
     @api.route(sub_path=('ui',))
-    @api.operation(tags=('swagger-ui',))
-    @api.response(200, "HTML content")
-    @api.produces('text/html')
+    @doc.operation(tags=('swagger-ui',))
+    @doc.response(200, "HTML content")
+    @doc.produces('text/html')
     def get_ui(self, request):
         """
         Load the Swagger UI interface
@@ -205,8 +211,8 @@ class SwaggerSpec(api.ResourceApi):
         return api.HttpResponse(self._ui_cache, headers={'ContentType': 'text/html'})
 
     @api.route(sub_path=('ui', api.PathNode('file_name', 'string', None)))
-    @api.operation(tags=('swagger-ui',))
-    @api.response(200, "HTML content")
+    @doc.operation(tags=('swagger-ui',))
+    @doc.response(200, "HTML content")
     def get_static(self, request, file_name=None):
         """
         Get static content for UI.
