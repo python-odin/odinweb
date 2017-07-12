@@ -16,6 +16,9 @@ DATA_TYPE_MAP = {
     'str': Type.String,
     'bool': Type.Boolean,
 }
+"""
+Mapping between type names and swagger data types.
+"""
 
 
 SWAGGER_SPEC_TYPE_MAPPING = {
@@ -64,6 +67,9 @@ def resource_definition(resource):
 
         if field.doc_text:
             field_definition['description'] = field.doc_text
+
+        if field.choices:
+            field_definition['enum'] = field.choices
 
         definition['properties'][field.name] = field_definition
 

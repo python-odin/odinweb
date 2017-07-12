@@ -273,7 +273,7 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
             return body.decode('UTF8')
         return body
 
-    def resource_from_body(self, request, allow_multiple=False, resource=None):
+    def get_resource(self, request, allow_multiple=False, resource=None):
         """
         Get a resource instance from ``request.body``.
         """

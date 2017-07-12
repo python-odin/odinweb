@@ -46,7 +46,7 @@ class OperationDoc(object):
 
     def add_parameter(self, name, in_, **options):
         # Ensure there are no duplicates
-        param = self._parameters.setdefault(name + in_, {})
+        param = self._parameters.setdefault("{}:{}".format(in_, name), {})
         param['name'] = name
         param['in'] = in_
         param.update((k, v) for k, v in options.items() if v is not None)
@@ -113,6 +113,21 @@ def parameter(name, in_, required=None, type_=None, default=None):
 
     def inner(func):
         OperationDoc.get(func).add_parameter(name, in_.value, required=required, type=type_.value, default=default)
+        return func
+    return inner
+
+
+def body_param(resource=None, description=None):
+    """
+    Decorator for defining request body
+    """
+    def inner(func):
+        args = {
+            'description': description,
+        }
+        if resource:
+            args['schema'] = {'$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)}
+        OperationDoc.get(func).add_parameter('', In.Body.value, **args)
         return func
     return inner
 

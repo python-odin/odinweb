@@ -277,7 +277,7 @@ class TestResourceApi(object):
         request = MockRequest(body=body)
 
         with pytest.raises(api.HttpError) as exc_info:
-            target.resource_from_body(request)
+            target.get_resource(request)
 
         assert exc_info.value.status == 400
         assert exc_info.value.resource.code == error_code
