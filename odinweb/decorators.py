@@ -11,6 +11,7 @@ from collections import namedtuple
 from functools import wraps
 
 from . import _compat
+from .doc import OperationDoc
 from .constants import *
 from .resources import Listing
 
@@ -21,8 +22,6 @@ __all__ = (
     'list_response',
     # Shortcuts
     'listing', 'create', 'detail', 'update', 'patch', 'delete', 'action', 'detail_action',
-    # Docs
-    'OperationDoc', 'operation', 'parameter', 'response', 'produces'
 )
 
 # Counter used to order routes
@@ -102,6 +101,7 @@ def list_response(func=None, max_offset=None, default_offset=0, max_limit=None, 
         docs.add_parameter('offset', In.Query.value, type=Type.Integer.value, default=default_offset)
         docs.add_parameter('limit', In.Query.value, type=Type.Integer.value, default=default_limit)
         docs.add_parameter('bare', In.Query.value, type=Type.Boolean.value, default=False)
+        docs.add_response(200, 'OK', Listing)
 
         @wraps(f)
         def wrapper(self, request, *args, **kwargs):
@@ -211,126 +211,3 @@ def delete(func=None, resource=None):
 
     """
     return route(func, PathType.Resource, DELETE, resource)
-
-
-# Documentation methods
-
-class OperationDoc(object):
-    @classmethod
-    def get(cls, func):
-        docs = getattr(func, '_api_docs', None)
-        if docs is None:
-            docs = cls(func)
-            setattr(func, '_api_docs', docs)
-        return docs
-
-    __slots__ = 'callback _parameters summary deprecated tags responses produces'.split()
-
-    def __init__(self, callback):
-        self.callback = callback
-        self.summary = None
-        self.deprecated = False
-        self.tags = set()
-        self._parameters = {}
-        self.responses = {
-            'default': {
-                'description': 'Return an error'
-            }
-        }
-        self.produces = set()
-
-    def add_parameter(self, name, in_, **options):
-        # Ensure there are no duplicates
-        param = self._parameters.setdefault(name + in_, {})
-        param['name'] = name
-        param['in'] = in_
-        param.update(o for o in options.items() if o[1] is not None)
-
-    def add_response(self, status, description):
-        self.responses[status] = {
-            'description': description
-        }
-
-    @property
-    def parameters(self):
-        return list(self._parameters.values())
-
-    @property
-    def description(self):
-        return self.callback.__doc__.strip()
-
-    def to_dict(self):
-        d = {
-            "operationId": self.callback.__name__,
-            "description": (self.callback.__doc__ or '').strip(),
-        }
-        if self.deprecated:
-            d['deprecated'] = True
-        if self.produces:
-            d['produces'] = list(self.produces)
-        if self.tags:
-            d['tags'] = list(self.tags)
-        if self.responses:
-            d['responses'] = self.responses
-        if self.parameters:
-            d['parameters'] = self.parameters
-
-        return d
-
-
-def operation(summary=None, tags=None, deprecated=False):
-    """
-    Decorator for applying operation documentation to a callback.
-
-    The values are based off `Swagger <https://swagger.io/specification>`_.
-
-    """
-    def inner(func):
-        docs = OperationDoc.get(func)
-        docs.summary = summary
-        docs.tags.update(tags)
-        docs.deprecated = deprecated
-        return func
-    return inner
-
-
-def parameter(name, in_, required=None, type_=None, default=None):
-    """
-    Decorator for applying parameter documentation to a callback.
-
-    The values are based off `Swagger <https://swagger.io/specification>`_.
-
-    """
-    if in_ not in In:
-        raise ValueError("In parameter not a valid value.")
-
-    def inner(func):
-        OperationDoc.get(func).add_parameter(name, in_.value, required=required, type=type_.value, default=default)
-        return func
-    return inner
-
-
-def response(status, description, resource=None):
-    """
-    Define an expected responses.
-
-    The values are based off `Swagger <https://swagger.io/specification>`_.
-
-    """
-    def inner(func):
-        OperationDoc.get(func).add_response(status, description)
-        return func
-    return inner
-
-
-def produces(*content_types):
-    """
-    Define content types produced by an endpoint.
-    """
-    if not all(isinstance(content_type, _compat.string_types) for content_type in content_types):
-        raise ValueError("In parameter not a valid value.")
-
-    def inner(func):
-        OperationDoc.get(func).produces.update(content_types)
-        return func
-    return inner
