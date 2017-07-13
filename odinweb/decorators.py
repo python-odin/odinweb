@@ -10,6 +10,7 @@ from __future__ import absolute_import
 from collections import namedtuple
 from functools import wraps
 
+from odinweb.utils import to_bool
 from . import _compat
 from .doc import OperationDoc
 from .constants import *
@@ -106,15 +107,21 @@ def list_response(func=None, max_offset=None, default_offset=0, max_limit=None, 
         @wraps(f)
         def wrapper(self, request, *args, **kwargs):
             # Get paging args from query string
-            offset = kwargs['offset'] = int(request.GET.get('offset', default_offset))
-            if max_offset and offset > max_offset:
-                offset = kwargs['offset'] = max_offset
+            offset = int(request.GET.get('offset', default_offset))
+            if offset < 0:
+                offset = 0
+            elif max_offset and offset > max_offset:
+                offset = max_offset
+            kwargs['offset'] = offset
 
-            limit = kwargs['limit'] = int(request.GET.get('limit', default_limit))
-            if max_limit and limit > max_limit:
-                limit = kwargs['limit'] = max_limit
+            limit = int(request.GET.get('limit', default_limit))
+            if limit < 1:
+                limit = 1
+            elif max_limit and limit > max_limit:
+                limit = max_limit
+            kwargs['limit'] = limit
 
-            bare = bool(request.GET.get('bare', False))
+            bare = to_bool(request.GET.get('bare', False))
             result = f(self, request, *args, **kwargs)
             if result is not None:
                 if isinstance(result, tuple) and len(result) == 2:
@@ -130,7 +137,7 @@ def list_response(func=None, max_offset=None, default_offset=0, max_limit=None, 
 
 # Shortcut methods
 
-def listing(func=None, resource=Listing, default_offset=0, default_limit=50):
+def listing(func=None, resource=Listing, max_offset=None, default_offset=0, max_limit=None, default_limit=50):
     """
     Decorator to indicate a listing endpoint.
 
@@ -143,7 +150,7 @@ def listing(func=None, resource=Listing, default_offset=0, default_limit=50):
 
     """
     return route(
-        list_response(func, default_offset, default_limit),
+        list_response(func, max_offset, default_offset, max_limit, default_limit),
         PathType.Collection, GET, resource
     )
 
