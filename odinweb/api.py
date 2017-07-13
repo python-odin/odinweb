@@ -321,6 +321,11 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
         try:
             body = request.response_codec.dumps(body)
         except Exception as ex:
+            if self.debug_enabled:
+                # If debug is enabled then fallback to the frameworks default
+                # error processing, this often provides convenience features
+                # to aid in the debugging process.
+                raise
             # Use a high level exception handler as the JSON codec can
             # return a large array of errors.
             self.handle_500(request, ex)
