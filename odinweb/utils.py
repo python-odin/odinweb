@@ -9,6 +9,7 @@ from __future__ import absolute_import, unicode_literals
 
 import os
 import base64
+import itertools
 
 from . import _compat
 
@@ -46,19 +47,28 @@ def to_bool(value):
     return bool(value)
 
 
-def first(iterable):
+def dict_filter_update(base, updates):
+    # type: (dict, dict) -> None
     """
-    Return the first item in an iterable. If there are no items return None.
+    Update dict with None values filtered out.
+    
+    :param base: 
+    :param updates: 
+     
     """
-    try:
-        return next(iterable)
-    except StopIteration:
-        return
+    base.update((k, v) for k, v in updates.items() if v is not None)
 
 
-def find(function, iterable):
+def dict_update_values(*args, **kwargs):
     """
-    Return first item from an iterable for which function(item)
-    is true. If function is None, return the first item that is true.
+    Merge into a dict with all of the None values removed.
+    
+    :param args: 
+    :param kwargs:
+    :rtype: dict
+ 
     """
-    return first(filter(function, iterable))
+    result = {}
+    for arg in itertools.chain(args, (kwargs,)):
+        dict_filter_update(result, arg)
+    return result
