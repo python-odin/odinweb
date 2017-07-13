@@ -99,8 +99,10 @@ def list_response(func=None, max_offset=None, default_offset=0, max_limit=None, 
     """
     def inner(f):
         docs = OperationDoc.get(f)
-        docs.add_parameter('offset', In.Query.value, type=Type.Integer.value, default=default_offset)
-        docs.add_parameter('limit', In.Query.value, type=Type.Integer.value, default=default_limit)
+        docs.add_parameter('offset', In.Query.value, type=Type.Integer.value,
+                           default=default_offset, minimum=0, maximum=max_offset)
+        docs.add_parameter('limit', In.Query.value, type=Type.Integer.value,
+                           default=default_limit, minimum=1, maximum=max_limit)
         docs.add_parameter('bare', In.Query.value, type=Type.Boolean.value, default=False)
         docs.add_response(200, 'OK', Listing)
 

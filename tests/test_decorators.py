@@ -3,7 +3,6 @@ import pytest
 from odinweb import decorators
 from odinweb.constants import *
 from odinweb.testing import MockRequest
-from odinweb.utils import find
 
 
 @pytest.mark.parametrize('decorator, definition', (
@@ -39,9 +38,9 @@ class TestListing(object):
         def my_func():
             pass
 
-        assert find(lambda p: p['name'] == 'offset',  my_func._api_docs.parameters)['default'] == offset
-        assert find(lambda p: p['name'] == 'limit',  my_func._api_docs.parameters)['default'] == limit
-        assert not find(lambda p: p['name'] == 'bare',  my_func._api_docs.parameters)['default']
+        assert my_func._api_docs.parameters['query:offset']['default'] == offset
+        assert my_func._api_docs.parameters['query:limit']['default'] == limit
+        assert not my_func._api_docs.parameters['query:bare']['default']
 
     @pytest.mark.parametrize('options, query, offset, limit, bare', (
         ({}, {}, 0, 50, False),
