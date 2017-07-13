@@ -6,13 +6,16 @@ Additional decorators for improving documentation of APIs.
 
 """
 from odin.utils import getmeta
+from odinweb.utils import dict_update_values, dict_filter_update
 
 from . import _compat
 from .constants import *
 
 __all__ = (
     # Docs
-    'OperationDoc', 'operation', 'parameter', 'response', 'produces'
+    'OperationDoc', 'operation',
+    'query_param', 'body_param', 'path_param', 'header_param',
+    'response', 'produces'
 )
 
 
@@ -28,28 +31,27 @@ class OperationDoc(object):
             setattr(func, '_api_docs', docs)
         return docs
 
-    __slots__ = 'callback _parameters summary deprecated tags responses produces'.split()
+    __slots__ = ('callback', 'summary', 'tags', 'consumes', 'produces', 'parameters', 'responses', 'deprecated')
 
     def __init__(self, callback):
         self.callback = callback
         self.summary = None
-        self.deprecated = False
         self.tags = set()
-        self._parameters = {}
+        self.consumes = {}
+        self.produces = set()
+        self.parameters = {}
         self.responses = {
             'default': {
                 'description': 'Error',
                 'schema': {'$ref': '#/definitions/Error'}
             }
         }
-        self.produces = set()
+        self.deprecated = None
 
     def add_parameter(self, name, in_, **options):
         # Ensure there are no duplicates
-        param = self._parameters.setdefault("{}:{}".format(in_, name), {})
-        param['name'] = name
-        param['in'] = in_
-        param.update((k, v) for k, v in options.items() if v is not None)
+        param = self.parameters.setdefault("{}:{}".format(in_, name), {'name': name, 'in': in_})
+        dict_filter_update(param, options)
 
     def add_response(self, status, description, resource=None):
         response_spec = {'description': description}
@@ -58,31 +60,16 @@ class OperationDoc(object):
 
         self.responses[status] = response_spec
 
-    @property
-    def parameters(self):
-        return list(self._parameters.values())
-
-    @property
-    def description(self):
-        return self.callback.__doc__.strip()
-
     def to_dict(self):
-        d = {
-            "operationId": self.callback.__name__,
-            "description": (self.callback.__doc__ or '').strip(),
-        }
-        if self.deprecated:
-            d['deprecated'] = True
-        if self.produces:
-            d['produces'] = list(self.produces)
-        if self.tags:
-            d['tags'] = list(self.tags)
-        if self.responses:
-            d['responses'] = self.responses
-        if self.parameters:
-            d['parameters'] = self.parameters
-
-        return d
+        return dict_update_values(
+            operationId=self.callback.__name__,
+            description=(self.callback.__doc__ or '').strip(),
+            deprecated=True if self.deprecated else None,
+            parameters=self.parameters.values() if self.parameters else None,
+            responses=self.responses if self.responses else None,
+            produces=list(self.produces) if self.produces else None,
+            tags=list(self.tags) if self.tags else None,
+        )
 
 
 def operation(summary=None, tags=None, deprecated=False):
@@ -101,33 +88,91 @@ def operation(summary=None, tags=None, deprecated=False):
     return inner
 
 
-def parameter(name, in_, required=None, type_=None, default=None):
+def query_param(name, type, description=None, required=False,
+                default=None, minimum=None, maximum=None, enum=None, **options):
     """
-    Decorator for applying parameter documentation to a callback.
-
-    The values are based off `Swagger <https://swagger.io/specification>`_.
+    Query parameter documentation. 
+    
+    :param name: 
+    :param type: 
+    :param description: 
+    :param default:
+    :param minimum:
+    :param maximum:
+    :param enum:
 
     """
-    if in_ not in In:
-        raise ValueError("In parameter not a valid value.")
-
     def inner(func):
-        OperationDoc.get(func).add_parameter(name, in_.value, required=required, type=type_.value, default=default)
+        OperationDoc.get(func).add_parameter(
+            name, In.Query.value, type=type.value, description=description, required=required or None,
+            default=default, minimum=minimum, maximum=maximum, enum=enum, **options)
         return func
     return inner
 
 
-def body_param(resource=None, description=None):
+def path_param(name, type, description=None,
+               default=None, minimum=None, maximum=None, enum=None, **options):
     """
-    Decorator for defining request body
+    Path parameter documentation. 
+    
+    :param name: 
+    :param type: 
+    :param description: 
+    :param default: 
+    :param minimum: 
+    :param maximum: 
+    :param enum: 
+    :param options: 
+
     """
     def inner(func):
-        args = {
-            'description': description,
-        }
-        if resource:
-            args['schema'] = {'$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)}
-        OperationDoc.get(func).add_parameter('', In.Body.value, **args)
+        OperationDoc.get(func).add_parameter(
+            name, In.Path.value, type=type.value, description=description,
+            default=default, minimum=minimum, maximum=maximum, enum=enum, **options
+        )
+        return func
+    return inner
+
+
+def body_param(resource=None, description=None,
+               default=None, minimum=None, maximum=None, enum=None, **options):
+    """
+    Body parameter documentation. 
+    
+    :param resource: 
+    :param description: 
+    :param default: 
+    :param minimum: 
+    :param maximum: 
+    :param enum: 
+    :param options: 
+
+    """
+    def inner(func):
+        schema = {'$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)} if resource else None
+        OperationDoc.get(func).add_parameter(
+            '', In.Body.value, description=description, schema=schema,
+            default=default, minimum=minimum, maximum=maximum, enum=enum, **options
+        )
+        return func
+    return inner
+
+
+def header_param(name, type, description=None, required=False, **options):
+    """
+    Header parameter documentation. 
+
+    :param name: 
+    :param type: 
+    :param description: 
+    :param required:
+    :param options: 
+
+    """
+    def inner(func):
+        OperationDoc.get(func).add_parameter(
+            name, In.Query.value, type=type.value, description=description, required=required or None,
+            **options)
         return func
     return inner
 
