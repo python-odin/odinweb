@@ -17,3 +17,18 @@ def random_string(bit_depth=64):
     """
     assert (bit_depth % 8) == 0, "Bit depth must be a multiple of 8"
     return base64.urlsafe_b64encode(os.urandom(bit_depth/8))
+
+
+def parse_content_type(value):
+    # type: (str) -> str
+    """
+    Parse out the content type from a content type header.
+    
+    >>> parse_content_type('application/json; charset=utf8')
+    'application/json'
+    
+    """
+    if not value:
+        return ''
+
+    return value.split(';')[0].strip()

@@ -18,6 +18,7 @@ from . import content_type_resolvers
 from .data_structures import ApiRoute, PathNode, HttpResponse
 from .exceptions import ImmediateHttpResponse, HttpError
 from .resources import Error
+from .utils import parse_content_type
 
 # Import all to simplify end user API.
 from .constants import *  # noqa
@@ -26,7 +27,6 @@ from .decorators import *  # noqa
 logger = logging.getLogger(__name__)
 
 CODECS = {
-    'text/plain': json_codec,
     json_codec.CONTENT_TYPE: json_codec,
 }
 # Attempt to load other codecs that have dependencies
@@ -48,7 +48,7 @@ def resolve_content_type(type_resolvers, request):
     Resolve content types from a request.
     """
     for resolver in type_resolvers:
-        content_type = resolver(request)
+        content_type = parse_content_type(resolver(request))
         if content_type:
             return content_type
 
@@ -133,9 +133,11 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
     Codecs that are supported by this API.
     """
 
-    respond_to_options = True
+    remap_codecs = {
+        'text/plain': 'application/json'
+    }
     """
-    Respond to an options request.
+    Remap certain codecs commonly mistakenly used.
     """
 
     parent = None
@@ -178,12 +180,14 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
         def wrapper(request, **path_args):
             # Determine the request and response types. Ensure API supports the requested types
             request_type = resolve_content_type(self.request_type_resolvers, request)
+            request_type = self.remap_codecs.get(request_type, request_type)
             try:
                 request.request_codec = self.registered_codecs[request_type]
             except KeyError:
                 return HttpResponse("Un-supported body content.", 406)
 
             response_type = resolve_content_type(self.response_type_resolvers, request)
+            response_type = self.remap_codecs.get(response_type, response_type)
             try:
                 request.response_codec = self.registered_codecs[response_type]
             except KeyError:
@@ -377,8 +381,9 @@ class ApiContainer(object):
 
                 # Add any route specific resources
                 for api_route in endpoint.api_routes():
-                    if api_route.callback.resource:
-                        resources.add(api_route.callback.resource)
+                    resource = getattr(api_route.callback, 'resource', None)
+                    if resource:
+                        resources.add(resource)
 
             elif isinstance(endpoint, ApiContainer):
                 resources.update(endpoint.referenced_resources())
