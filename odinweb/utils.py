@@ -18,8 +18,9 @@ def random_string(bit_depth=64):
     """
     Generate a random string of a certain bit depth
     """
-    assert (bit_depth % 8) == 0, "Bit depth must be a multiple of 8"
-    return base64.urlsafe_b64encode(os.urandom(bit_depth/8))
+    if bit_depth % 8 != 0:
+        raise ValueError("Bit depth must be a multiple of 8")
+    return base64.urlsafe_b64encode(os.urandom(bit_depth/8)).rstrip('=')
 
 
 def parse_content_type(value):
@@ -38,7 +39,7 @@ def parse_content_type(value):
 
 
 def to_bool(value):
-    # type: (*) -> bool
+    # type: (Any) -> bool
     """
     Convert a value into a bool but handle "truthy" strings eg, yes, true, ok, y
     """
@@ -59,7 +60,7 @@ def dict_filter_update(base, updates):
     base.update((k, v) for k, v in updates.items() if v is not None)
 
 
-def dict_update_values(*args, **kwargs):
+def dict_filter(*args, **kwargs):
     """
     Merge into a dict with all of the None values removed.
     
