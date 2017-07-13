@@ -60,11 +60,12 @@ class UserApi(api.ResourceApi):
 
 
 class MockRequest(object):
-    def __init__(self, method='GET', headers=None, body=None, request_codec=None):
+    def __init__(self, method='GET', headers=None, body=None, request_codec=None, response_codec=None):
         self.body = body
         self.method = method
         self.headers = headers or {}
         self.request_codec = request_codec or json_codec
+        self.response_codec = response_codec or json_codec
 
 
 class MockResourceApi(object):
@@ -281,6 +282,22 @@ class TestResourceApi(object):
 
         assert exc_info.value.status == 400
         assert exc_info.value.resource.code == error_code
+
+    @pytest.mark.parametrize('value, body, status', (
+        (None, None, 204),
+        ('abc', '"abc"', 200),
+        (123, '123', 200),
+        ([], None, 204),
+        ([1, 2, 3], '[1, 2, 3]', 200),
+        (set("123"), 'Error encoding response.', 500),
+    ))
+    def test_create_response(self, value, body, status):
+        target = UserApi()
+        request = MockRequest()
+
+        actual = target.create_response(request, value)
+        assert actual.body == body
+        assert actual.status == status
 
 
 class TestApiContainer(object):
