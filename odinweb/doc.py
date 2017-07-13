@@ -6,7 +6,7 @@ Additional decorators for improving documentation of APIs.
 
 """
 from odin.utils import getmeta
-from odinweb.utils import dict_update_values, dict_filter_update
+from odinweb.utils import dict_filter, dict_filter_update
 
 from . import _compat
 from .constants import *
@@ -61,7 +61,7 @@ class OperationDoc(object):
         self.responses[status] = response_spec
 
     def to_dict(self):
-        return dict_update_values(
+        return dict_filter(
             operationId=self.callback.__name__,
             description=(self.callback.__doc__ or '').strip(),
             deprecated=True if self.deprecated else None,
