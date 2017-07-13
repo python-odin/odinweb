@@ -165,8 +165,10 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
             api_routes = []
             for route_ in self._routes:
                 path = [self.api_name]
+
                 if route_.path_type == PathType.Resource:
                     path.append(PathNode(self.resource_id_name, self.resource_id_type, None))
+
                 if route_.sub_path:
                     path += route_.sub_path
 
@@ -319,6 +321,8 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
         try:
             body = request.response_codec.dumps(body)
         except Exception as ex:
+            # Use a high level exception handler as the JSON codec can
+            # return a large array of errors.
             self.handle_500(request, ex)
             return HttpResponse("Error encoding response.", 500)
         else:
@@ -380,10 +384,9 @@ class ApiContainer(object):
                     resources.add(endpoint.resource)
 
                 # Add any route specific resources
-                for api_route in endpoint.api_routes():
-                    resource = getattr(api_route.callback, 'resource', None)
-                    if resource:
-                        resources.add(resource)
+                resources.update(r.callback.resource
+                                 for r in endpoint.api_routes()
+                                 if getattr(r.callback, 'resource', None))
 
             elif isinstance(endpoint, ApiContainer):
                 resources.update(endpoint.referenced_resources())

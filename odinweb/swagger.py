@@ -185,7 +185,7 @@ class SwaggerSpec(api.ResourceApi):
             raise api.HttpError(404, 40442, "Swagger not available.",
                                 "Swagger API is detached from a parent container.")
 
-        result = {
+        return {
             'swagger': '2.0',
             'info': {
                 'title': self.title,
@@ -198,7 +198,6 @@ class SwaggerSpec(api.ResourceApi):
             'paths': self.flatten_routes(api_base),
             'definitions': self.resource_definitions(api_base),
         }
-        return result
 
     def load_static(self, file_name):
         if not self.enable_ui:
