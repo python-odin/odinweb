@@ -10,6 +10,7 @@ from odinweb import resources
 from odinweb._compat import *
 from odinweb.constants import *
 from odinweb.decorators import RouteDefinition
+from odinweb.utils import dict_filter
 
 DATA_TYPE_MAP = {
     'int': Type.Integer,
@@ -83,10 +84,12 @@ class SwaggerSpec(api.ResourceApi):
     """
     api_name = 'swagger'
 
-    def __init__(self, title, enable_ui=False):
+    def __init__(self, title, enable_ui=False, host=None, schemes=None):
         super(SwaggerSpec, self).__init__()
         self.title = title
         self.enable_ui = enable_ui
+        self.host = host
+        self.schemes = schemes
 
         # Register UI routes
         if enable_ui:
@@ -185,19 +188,20 @@ class SwaggerSpec(api.ResourceApi):
             raise api.HttpError(404, 40442, "Swagger not available.",
                                 "Swagger API is detached from a parent container.")
 
-        return {
+        return dict_filter({
             'swagger': '2.0',
             'info': {
                 'title': self.title,
                 'version': str(getattr(api_base, 'version', 0))
             },
-            'host': request.host,
+            'host': self.host or request.host,
+            'schemes': self.schemes,
             'basePath': self.base_path,
             'consumes': list(api.CODECS.keys()),
             'produces': list(api.CODECS.keys()),
             'paths': self.flatten_routes(api_base),
             'definitions': self.resource_definitions(api_base),
-        }
+        })
 
     def load_static(self, file_name):
         if not self.enable_ui:
