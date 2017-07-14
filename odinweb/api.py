@@ -435,17 +435,16 @@ class ApiInterfaceBase(ApiContainer):
     """
     def __init__(self, *endpoints, **options):
         options.setdefault('name', 'api')
-        self.url_prefix = options.pop('url_prefix', '/')
+        url_prefix = options.pop('url_prefix', '/')
         self.debug_enabled = options.pop('debug_enabled', False)
         super(ApiInterfaceBase, self).__init__(*endpoints, **options)
+        self.path_prefix.insert(0, url_prefix.rstrip('/'))
 
     def build_routes(self):
         parse_node = self.parse_node
-        # Ensure URL's start with a slash
-        path_prefix = (self.url_prefix.rstrip('/'),)
 
         for api_route in self.api_routes():
-            path = '/'.join(parse_node(p) for p in chain(path_prefix, api_route.path))
+            path = '/'.join(parse_node(p) for p in api_route.path)
             yield ApiRoute(path, api_route.methods, api_route.callback)
 
     def parse_node(self, node):

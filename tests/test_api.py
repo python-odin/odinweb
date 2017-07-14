@@ -385,17 +385,16 @@ class TestApiCollection(object):
 
 
 class TestApiInterfaceBase(object):
-    @pytest.mark.parametrize('options,name,url_prefix,debug_enabled,path_prefix', (
-        ({}, 'api', '/', False, ['api']),
-        ({'name': '!api'}, '!api', '/', False, ['!api']),
-        ({'url_prefix': '/my-app/'}, 'api', '/my-app/', False, ['api']),
-        ({'debug_enabled': True}, 'api', '/', True, ['api']),
+    @pytest.mark.parametrize('options,name,debug_enabled,path_prefix', (
+        ({}, 'api', False, ['', 'api']),
+        ({'name': '!api'}, '!api', False, ['', '!api']),
+        ({'url_prefix': '/my-app/'}, 'api', False, ['/my-app', 'api']),
+        ({'debug_enabled': True}, 'api', True, ['', 'api']),
     ))
-    def test_options(self, options, name, url_prefix, debug_enabled, path_prefix):
+    def test_options(self, options, name, debug_enabled, path_prefix):
         target = api.ApiInterfaceBase(**options)
 
         assert target.name == name
-        assert target.url_prefix == url_prefix
         assert target.debug_enabled == debug_enabled
         assert target.path_prefix == path_prefix
 

@@ -113,7 +113,7 @@ class SwaggerSpec(api.ResourceApi):
                 path.append(parent.path_prefix)
             parent = getattr(parent, 'parent', None)
 
-        return '/' + '/'.join(itertools.chain.from_iterable(reversed(path)))
+        return '/'.join(itertools.chain.from_iterable(reversed(path)))
 
     @property
     def swagger_path(self):
