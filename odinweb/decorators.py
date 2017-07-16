@@ -32,7 +32,7 @@ _route_count = 0
 RouteDefinition = namedtuple("RouteDefinition", 'route_number path_type methods sub_path callback')
 
 
-def route(func=None, path_type=PathType.Collection, methods=GET, resource=None, sub_path=None):
+def route(func=None, path_type=PathType.Collection, methods=Method.Get, resource=None, sub_path=None):
     """
     Decorator for defining an API route. Usually one of the helpers (listing, detail, update, delete) would be
     used in place of the route decorator.
@@ -42,7 +42,7 @@ def route(func=None, path_type=PathType.Collection, methods=GET, resource=None, 
         class ItemApi(ResourceApi):
             resource = Item
 
-            @route(path=PATH_TYPE_LIST, methods=GET)
+            @route(path=PathType.Collection, methods=Method.Get)
             def list_items(self, request):
                 ...
                 return items
@@ -56,8 +56,12 @@ def route(func=None, path_type=PathType.Collection, methods=GET, resource=None, 
         default is the one specified on the ResourceAPI instance.
 
     """
-    if isinstance(methods, _compat.string_types):
-        methods = (methods, )
+    if isinstance(methods, (tuple, list)):
+        methods = tuple(method.value if isinstance(method, Method) else method for method in methods)
+    elif isinstance(methods, Method):
+        methods = (methods.value,)
+    elif isinstance(methods, _compat.string_types):
+        methods = (methods,)
 
     # Generate a route number
     global _route_count
@@ -81,7 +85,7 @@ def route(func=None, path_type=PathType.Collection, methods=GET, resource=None, 
 collection = collection_action = action = route
 
 
-def resource_route(func=None, method=GET, resource=None, sub_path=None):
+def resource_route(func=None, method=Method.Get, resource=None, sub_path=None):
     return route(func, PathType.Resource, method, resource, sub_path)
 
 resource_action = detail_action = resource_route
@@ -91,14 +95,14 @@ resource_action = detail_action = resource_route
 
 def list_response(func=None, max_offset=None, default_offset=0, max_limit=None, default_limit=50):
     """
-    Handle processing a list. It is assumed decorator will operate on a class.
+    Handle processing a list. It is assumed decorator will operate on a class method.
 
     This decorator extracts offer/limit values from the query string and returns
     a Listing response and applies total counts.
 
     """
     def inner(f):
-        docs = OperationDoc.get(f)
+        docs = OperationDoc.bind(f)
         docs.add_parameter('offset', In.Query.value, type=Type.Integer.value,
                            default=default_offset, minimum=0, maximum=max_offset)
         docs.add_parameter('limit', In.Query.value, type=Type.Integer.value,
@@ -137,11 +141,40 @@ def list_response(func=None, max_offset=None, default_offset=0, max_limit=None, 
     return inner(func) if func else inner
 
 
+def resource_request(func=None, resource=None):
+    """
+    Handle processing a request with a resource body. 
+    
+    It is assumed decorator will operate on a class method.
+    """
+    def inner(f):
+        OperationDoc.bind(f).body_param(resource)
+
+        @wraps(f)
+        def wrapper(self, request, *args, **kwargs):
+            item = self.get_resource(request, resource=resource or self.resource)
+            return f(self, request, item, *args, **kwargs)
+
+        return wrapper
+
+    return inner(func) if func else inner
+
+
 # Shortcut methods
 
 def listing(func=None, resource=Listing, max_offset=None, default_offset=0, max_limit=None, default_limit=50):
     """
     Decorator to indicate a listing endpoint.
+
+    Usage::
+
+        class ItemApi(ResourceApi):
+            resource = Item
+
+            @listing(path=PathType.Collection, methods=Method.Get)
+            def list_items(self, request, offset, limit):
+                ...
+                return items
 
     :param func: Function we are routing
     :param resource: Specify the resource that this function
@@ -153,7 +186,7 @@ def listing(func=None, resource=Listing, max_offset=None, default_offset=0, max_
     """
     return route(
         list_response(func, max_offset, default_offset, max_limit, default_limit),
-        PathType.Collection, GET, resource
+        PathType.Collection, Method.Get, resource
     )
 
 
@@ -167,7 +200,7 @@ def create(func=None, resource=None):
         instance.
 
     """
-    return route(func, PathType.Collection, POST, resource)
+    return route(resource_request(func, resource), PathType.Collection, Method.Post, resource)
 
 
 def detail(func=None, resource=None):
@@ -180,7 +213,7 @@ def detail(func=None, resource=None):
         instance.
 
     """
-    return route(func, PathType.Resource, GET, resource)
+    return route(func, PathType.Resource, Method.Get, resource)
 
 
 def update(func=None, resource=None):
@@ -193,7 +226,7 @@ def update(func=None, resource=None):
         instance.
 
     """
-    return route(func, PathType.Resource, PUT, resource)
+    return route(resource_request(func, resource), PathType.Resource, Method.Put, resource)
 
 
 def patch(func=None, resource=None):
@@ -206,7 +239,7 @@ def patch(func=None, resource=None):
         instance.
 
     """
-    return route(func, PathType.Resource, PATCH, resource)
+    return route(resource_request(func, resource), PathType.Resource, Method.Patch, resource)
 
 
 def delete(func=None, resource=None):
@@ -219,4 +252,4 @@ def delete(func=None, resource=None):
         instance.
 
     """
-    return route(func, PathType.Resource, DELETE, resource)
+    return route(func, PathType.Resource, Method.Delete, resource)
