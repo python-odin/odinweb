@@ -1,5 +1,7 @@
 from collections import namedtuple
 
+from .constants import *
+
 
 # Used to define path nodes
 PathNode = namedtuple('PathNode', 'name type type_args')
@@ -15,8 +17,14 @@ class HttpResponse(object):
     """
     __slots__ = ('status', 'body', 'headers')
 
-    def __init__(self, body, status=200, headers=None):
+    @classmethod
+    def from_status(cls, http_status, headers=None):
+        return cls(http_status.description, http_status, headers)
+
+    def __init__(self, body, status=HTTPStatus.OK, headers=None):
         self.body = body
+        if isinstance(status, HTTPStatus):
+            status = status.value
         self.status = status
         self.headers = headers or {}
 

@@ -1,4 +1,8 @@
 import enum
+try:
+    from http import HTTPStatus
+except ImportError:
+    from odinweb._compat.http import HTTPStatus
 
 
 # Well known methods

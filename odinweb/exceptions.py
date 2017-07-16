@@ -5,13 +5,14 @@ Exceptions
 
 """
 from odinweb.resources import Error
+from .constants import *
 
 
 class ImmediateHttpResponse(Exception):
     """
     A response that should be returned immediately.
     """
-    def __init__(self, resource, status=200, headers=None):
+    def __init__(self, resource, status=HTTPStatus.OK, headers=None):
         self.resource = resource
         self.status = status
         self.headers = headers
@@ -34,6 +35,6 @@ class PermissionDenied(HttpError):
     """
     def __init__(self, message=None, developer_method=None, headers=None):
         super(PermissionDenied, self).__init__(
-            403, 40300, message or "Permission Denied",
+            HTTPStatus.FORBIDDEN, 40300, message or HTTPStatus.FORBIDDEN.description,
             developer_method, None, headers
         )

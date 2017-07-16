@@ -7,6 +7,8 @@ Like odin this library will support Python 2.7 through to a 2.0 release. From
 this point onwards Python 3.5+ will be required.
 
 """
+from __future__ import absolute_import
+
 import sys
 
 __all__ = (
@@ -31,6 +33,7 @@ else:
     text_type = str
     binary_type = bytes
     range = range
+
 
 def with_metaclass(meta, *bases):
     """Create a base class with a metaclass."""

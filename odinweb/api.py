@@ -186,18 +186,18 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
             try:
                 request.request_codec = self.registered_codecs[request_type]
             except KeyError:
-                return HttpResponse("Un-supported body content.", 406)
+                return HttpResponse.from_status(HTTPStatus.UNPROCESSABLE_ENTITY)
 
             response_type = resolve_content_type(self.response_type_resolvers, request)
             response_type = self.remap_codecs.get(response_type, response_type)
             try:
                 request.response_codec = self.registered_codecs[response_type]
             except KeyError:
-                return HttpResponse("Un-supported response type.", 406)
+                return HttpResponse.from_status(HTTPStatus.NOT_ACCEPTABLE)
 
             # Check if method is in our allowed method list
             if request.method not in methods:
-                return HttpResponse("Method not allowed.", 405, {'Allow', ','.join(methods)})
+                return HttpResponse.from_status(HTTPStatus.METHOD_NOT_ALLOWED, {'Allow', ','.join(methods)})
 
             # Response types
             status = headers = None
@@ -213,13 +213,15 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
             except ValidationError as e:
                 # A validation error was raised by a resource.
                 if hasattr(e, 'message_dict'):
-                    resource = Error(400, 40000, "Failed validation", meta=e.message_dict)
+                    resource = Error.from_status(HTTPStatus.BAD_REQUEST, 0, "Failed validation",
+                                                 meta=e.message_dict)
                 else:
-                    resource = Error(400, 40000, str(e))
+                    resource = Error.from_status(HTTPStatus.BAD_REQUEST, 0, str(e))
                 status = resource.status
 
             except NotImplementedError:
-                resource = Error(501, 50100, "The method has not been implemented")
+                resource = Error.from_status(HTTPStatus.NOT_IMPLEMENTED, 0,
+                                             "The method has not been implemented")
                 status = resource.status
 
             except Exception as e:
@@ -230,6 +232,9 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
                     raise
                 resource = self.handle_500(request, e)
                 status = resource.status
+
+            if isinstance(status, HTTPStatus):
+                status = status.value
 
             # Return a HttpResponse and just send it!
             if isinstance(resource, HttpResponse):
@@ -267,7 +272,8 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
             'status_code': 500,
             'request': request
         })
-        return Error(500, 50000, "An unhandled error has been caught.")
+        return Error.from_status(HTTPStatus.INTERNAL_SERVER_ERROR, 0,
+                                 "An unhandled error has been caught.")
 
     def decode_body(self, request):
         """
@@ -288,20 +294,20 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
         try:
             body = self.decode_body(request)
         except UnicodeDecodeError as ude:
-            raise HttpError(400, 40099, "Unable to decode request body.", str(ude))
+            raise HttpError(HTTPStatus.BAD_REQUEST, 40099, "Unable to decode request body.", str(ude))
 
         try:
             resource = request.request_codec.loads(body, resource=resource, full_clean=False)
 
         except ValueError as ve:
-            raise HttpError(400, 40098, "Unable to load resource.", str(ve))
+            raise HttpError(HTTPStatus.BAD_REQUEST, 40098, "Unable to load resource.", str(ve))
 
         except CodecDecodeError as cde:
-            raise HttpError(400, 40096, "Unable to decode body.", str(cde))
+            raise HttpError(HTTPStatus.BAD_REQUEST, 40096, "Unable to decode body.", str(cde))
 
         # Check an array of data hasn't been supplied
         if not allow_multiple and isinstance(resource, list):
-            raise HttpError(400, 40097, "Expected a single resource not a list.")
+            raise HttpError(HTTPStatus.BAD_REQUEST, 40097, "Expected a single resource not a list.")
 
         return resource
 
@@ -316,7 +322,7 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
 
         """
         if not body:
-            return HttpResponse(None, status or 204, headers)
+            return HttpResponse(None, status or HTTPStatus.NO_CONTENT, headers)
 
         try:
             body = request.response_codec.dumps(body)
@@ -329,9 +335,9 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
             # Use a high level exception handler as the JSON codec can
             # return a large array of errors.
             self.handle_500(request, ex)
-            return HttpResponse("Error encoding response.", 500)
+            return HttpResponse("Error encoding response.", HTTPStatus.INTERNAL_SERVER_ERROR)
         else:
-            response = HttpResponse(body, status or 200, headers)
+            response = HttpResponse(body, status or HTTPStatus.OK, headers)
             response.set_content_type(request.response_codec.CONTENT_TYPE)
             return response
 
@@ -354,7 +360,7 @@ class ApiContainer(object):
         self.path_prefix = path_prefix
 
         if options:
-            raise TypeError("Got an unexpected keyword argument '{}'", options.keys()[-1])
+            raise TypeError("Got an unexpected keyword argument(s) {}", options.keys())
 
     def api_routes(self, path_prefix=None):
         """
