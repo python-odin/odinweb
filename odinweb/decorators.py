@@ -20,7 +20,7 @@ __all__ = (
     # Basic routes
     'route', 'collection', 'collection_action', 'resource_route', 'resource_action',
     # Handlers
-    'list_response',
+    'list_response', 'resource_request',
     # Shortcuts
     'listing', 'create', 'detail', 'update', 'patch', 'delete', 'action', 'detail_action',
 )
