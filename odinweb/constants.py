@@ -5,14 +5,17 @@ except ImportError:
     from odinweb._compat.http import HTTPStatus
 
 
-# Well known methods
-GET = 'GET'
-HEAD = 'HEAD'
-POST = 'POST'
-PUT = 'PUT'
-PATCH = 'PATCH'
-DELETE = 'DELETE'
-OPTIONS = 'OPTIONS'
+class Method(enum.Enum):
+    """
+    Well known HTTP methods
+    """
+    Get = 'GET'
+    Put = 'PUT'
+    Head = 'HEAD'
+    Post = 'POST'
+    Patch = 'PATCH'
+    Delete = 'DELETE'
+    Options = 'OPTIONS'
 
 
 # Type of path
