@@ -157,7 +157,7 @@ class SwaggerSpec(api.ResourceApi):
                 path_spec['parameters'] = parameters
 
             # Generate operation spec
-            docs = doc.OperationDoc.get(api_route.callback)
+            docs = doc.OperationDoc.bind(api_route.callback)
 
             # Add methods
             for method in api_route.methods:

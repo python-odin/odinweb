@@ -19,12 +19,29 @@ __all__ = (
 )
 
 
+class ResourceApiDoc(object):
+    @classmethod
+    def bind(cls, obj):
+        # type: (object) -> ResourceApiDoc
+        docs = getattr(obj, '__docs__', None)
+        if docs is None:
+            docs = cls(obj)
+            setattr(obj, '__docs__', docs)
+        return docs
+
+    __slots__ = ('resource_api',)
+
+    def __init__(self, resource_api):
+        self.resource_api = resource_api
+
+
 class OperationDoc(object):
     """
     Utility class for building/storing documentation on callback endpoints.
     """
     @classmethod
-    def get(cls, func):
+    def bind(cls, func):
+        # type: (func) -> cls
         docs = getattr(func, '_api_docs', None)
         if docs is None:
             docs = cls(func)
@@ -35,10 +52,7 @@ class OperationDoc(object):
 
     def __init__(self, callback):
         self.callback = callback
-        self.summary = None
-        self.tags = set()
-        self.consumes = {}
-        self.produces = set()
+        self.deprecated = None
         self.parameters = {}
         self.responses = {
             'default': {
@@ -46,12 +60,22 @@ class OperationDoc(object):
                 'schema': {'$ref': '#/definitions/Error'}
             }
         }
-        self.deprecated = None
+        self.produces = set()
+        self.consumes = {}
+        self.summary = None
+        self.tags = set()
 
     def add_parameter(self, name, in_, **options):
         # Ensure there are no duplicates
         param = self.parameters.setdefault("{}:{}".format(in_, name), {'name': name, 'in': in_})
         dict_filter_update(param, options)
+
+    def body_param(self, resource, description=None, default=None, **options):
+        """
+        Set the body param
+        """
+        schema = {'$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)} if resource else None
+        self.add_parameter('body', In.Body.value, description=description, schema=schema, default=default, **options)
 
     def add_response(self, status, description, resource=None):
         response_spec = {'description': description}
@@ -80,7 +104,7 @@ def operation(summary=None, tags=None, deprecated=False):
 
     """
     def inner(func):
-        docs = OperationDoc.get(func)
+        docs = OperationDoc.bind(func)
         docs.summary = summary
         docs.tags.update(tags)
         docs.deprecated = deprecated
@@ -96,6 +120,7 @@ def query_param(name, type, description=None, required=False,
     :param name: 
     :param type: 
     :param description: 
+    :param required: 
     :param default:
     :param minimum:
     :param maximum:
@@ -103,7 +128,7 @@ def query_param(name, type, description=None, required=False,
 
     """
     def inner(func):
-        OperationDoc.get(func).add_parameter(
+        OperationDoc.bind(func).add_parameter(
             name, In.Query.value, type=type.value, description=description, required=required or None,
             default=default, minimum=minimum, maximum=maximum, enum=enum, **options)
         return func
@@ -126,7 +151,7 @@ def path_param(name, type, description=None,
 
     """
     def inner(func):
-        OperationDoc.get(func).add_parameter(
+        OperationDoc.bind(func).add_parameter(
             name, In.Path.value, type=type.value, description=description,
             default=default, minimum=minimum, maximum=maximum, enum=enum, **options
         )
@@ -134,26 +159,18 @@ def path_param(name, type, description=None,
     return inner
 
 
-def body_param(resource=None, description=None,
-               default=None, minimum=None, maximum=None, enum=None, **options):
+def body(resource=None, description=None, default=None, **options):
     """
     Body parameter documentation. 
     
     :param resource: 
     :param description: 
     :param default: 
-    :param minimum: 
-    :param maximum: 
-    :param enum: 
     :param options: 
 
     """
     def inner(func):
-        schema = {'$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)} if resource else None
-        OperationDoc.get(func).add_parameter(
-            '', In.Body.value, description=description, schema=schema,
-            default=default, minimum=minimum, maximum=maximum, enum=enum, **options
-        )
+        OperationDoc.bind(func).body_param(resource, description, default, **options)
         return func
     return inner
 
@@ -170,7 +187,7 @@ def header_param(name, type, description=None, required=False, **options):
 
     """
     def inner(func):
-        OperationDoc.get(func).add_parameter(
+        OperationDoc.bind(func).add_parameter(
             name, In.Query.value, type=type.value, description=description, required=required or None,
             **options)
         return func
@@ -185,7 +202,7 @@ def response(status, description, resource=None):
 
     """
     def inner(func):
-        OperationDoc.get(func).add_response(status, description, resource)
+        OperationDoc.bind(func).add_response(status, description, resource)
         return func
     return inner
 
@@ -198,6 +215,6 @@ def produces(*content_types):
         raise ValueError("In parameter not a valid value.")
 
     def inner(func):
-        OperationDoc.get(func).produces.update(content_types)
+        OperationDoc.bind(func).produces.update(content_types)
         return func
     return inner
