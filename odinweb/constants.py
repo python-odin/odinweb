@@ -1,4 +1,5 @@
 import enum
+
 try:
     from http import HTTPStatus
 except ImportError:
@@ -9,23 +10,27 @@ class Method(enum.Enum):
     """
     Well known HTTP methods
     """
-    Get = 'GET'
-    Put = 'PUT'
-    Head = 'HEAD'
-    Post = 'POST'
-    Patch = 'PATCH'
-    Delete = 'DELETE'
-    Options = 'OPTIONS'
+    GET = 'GET'
+    PUT = 'PUT'
+    HEAD = 'HEAD'
+    POST = 'POST'
+    PATCH = 'PATCH'
+    DELETE = 'DELETE'
+    OPTIONS = 'OPTIONS'
 
 
-# Type of path
 class PathType(enum.Enum):
+    """
+    Type of path to use
+    """
     Collection = 'collection'
     Resource = 'resource'
 
 
-# Parameter location
 class In(enum.Enum):
+    """
+    Location of a parameter
+    """
     Path = 'path'
     Query = 'query'
     Header = 'header'
@@ -33,8 +38,10 @@ class In(enum.Enum):
     Form = 'formData'
 
 
-# Data-types
 class Type(enum.Enum):
+    """
+    API Data type definitions
+    """
     String = "string"
     Number = "number"
     Integer = "integer"
