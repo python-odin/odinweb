@@ -49,7 +49,7 @@ class UserApi(api.ResourceApi):
         self.calls.append('get_item')
         return User(resource_id, 'Dave')
 
-    @api.detail_action(sub_path='start', method=api.POST)
+    @api.detail_action(sub_path='start', method=api.Method.POST)
     def start_item(self, request):
         self.calls.append('start_item')
         return self.create_response(request, status=202)
@@ -183,10 +183,10 @@ class TestResourceApi(object):
 
     @pytest.mark.parametrize('r, status, message', (
         (MockRequest(headers={'content-type': 'application/xml', 'accepts': 'application/json'}),
-         406, 'Un-supported body content.'),
+         422, 'Unprocessable Entity'),
         (MockRequest(headers={'content-type': 'application/json', 'accepts': 'application/xml'}),
-         406, 'Un-supported response type.'),
-        (MockRequest('POST'), 405, 'Method not allowed.'),
+         406, 'URI not available in preferred format'),
+        (MockRequest('POST'), 405, 'Specified method is invalid for this resource'),
     ))
     def test_wrap_callback__invalid_headers(self, r, status, message):
         def callback(s, request):
@@ -196,8 +196,8 @@ class TestResourceApi(object):
         wrapper = target._wrap_callback(callback, ['GET'])
         actual = wrapper(r)
 
-        assert actual.body == message
         assert actual.status == status
+        assert actual.body == message
 
     @pytest.mark.parametrize('error,status', (
         (api.ImmediateHttpResponse(None, 330, {}), 330),

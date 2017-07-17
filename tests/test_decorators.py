@@ -6,14 +6,14 @@ from odinweb.testing import MockRequest
 
 
 @pytest.mark.parametrize('decorator, definition', (
-    (decorators.route, (PathType.Collection, (GET,), None)),
-    (decorators.resource_route, (PathType.Resource, (GET,), None)),
-    (decorators.listing, (PathType.Collection, (GET,), None)),
-    (decorators.create, (PathType.Collection, (POST,), None)),
-    (decorators.detail, (PathType.Resource, (GET,), None)),
-    (decorators.update, (PathType.Resource, (PUT,), None)),
-    (decorators.patch, (PathType.Resource, (PATCH,), None)),
-    (decorators.delete, (PathType.Resource, (DELETE,), None)),
+    (decorators.route, (PathType.Collection, (Method.GET.value,), None)),
+    (decorators.resource_route, (PathType.Resource, (Method.GET.value,), None)),
+    (decorators.listing, (PathType.Collection, (Method.GET.value,), None)),
+    (decorators.create, (PathType.Collection, (Method.POST.value,), None)),
+    (decorators.detail, (PathType.Resource, (Method.GET.value,), None)),
+    (decorators.update, (PathType.Resource, (Method.PUT.value,), None)),
+    (decorators.patch, (PathType.Resource, (Method.PATCH.value,), None)),
+    (decorators.delete, (PathType.Resource, (Method.DELETE.value,), None)),
 ))
 def test_endpoint_decorators(decorator, definition):
     @decorator
@@ -38,9 +38,9 @@ class TestListing(object):
         def my_func():
             pass
 
-        assert my_func._api_docs.parameters['query:offset']['default'] == offset
-        assert my_func._api_docs.parameters['query:limit']['default'] == limit
-        assert not my_func._api_docs.parameters['query:bare']['default']
+        assert getattr(my_func, '__docs')._parameters['query:offset']['default'] == offset
+        assert getattr(my_func, '__docs')._parameters['query:limit']['default'] == limit
+        assert not getattr(my_func, '__docs')._parameters['query:bare']['default']
 
     @pytest.mark.parametrize('options, query, offset, limit, bare', (
         ({}, {}, 0, 50, False),
