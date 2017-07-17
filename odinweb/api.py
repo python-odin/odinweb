@@ -100,7 +100,7 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
     The resource this API is modelled on.
     """
 
-    resource_id_type = 'int'
+    resource_id_type = Type.Integer
     """
     Resource ID type.
     """
@@ -108,6 +108,11 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
     resource_id_name = 'resource_id'
     """
     Name of the resource ID field
+    """
+
+    path_prefix = []
+    """
+    Prefix to prepend to any generated path.
     """
 
     request_type_resolvers = [
@@ -164,7 +169,7 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
         if self._api_routes is None:
             api_routes = []
             for route_ in self._routes:
-                path = [self.api_name]
+                path = list(self.path_prefix) + [self.api_name]
 
                 if route_.path_type == PathType.Resource:
                     path.append(PathNode(self.resource_id_name, self.resource_id_type, None))
