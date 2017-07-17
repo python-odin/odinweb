@@ -94,10 +94,10 @@ class SwaggerSpec(api.ResourceApi):
         # Register UI routes
         if enable_ui:
             self._routes.append(RouteDefinition(
-                0, api.PathType.Collection, ('GET',), ('ui',),
+                0, api.PathType.Collection, (Method.GET.value,), ('ui',),
                 SwaggerSpec.get_ui))
             self._routes.append(RouteDefinition(
-                0, api.PathType.Collection, ('GET',), ('ui', api.PathNode('file_name', 'string', None)),
+                0, api.PathType.Collection, (Method.GET.value,), ('ui', api.PathNode('file_name', api.Type.String)),
                 SwaggerSpec.get_static))
 
         self._ui_cache = None
