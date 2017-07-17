@@ -14,8 +14,8 @@ With the following frameworks to be included once a stable API is established:
 
 - `Retort <https://github.com/timsavage/retort>`_ - A Flask/Bottle like framework for AWS Lambda/API Gateway
 - `Django <https://wwww.djangoproject.org/>`_ - Odin/Django integration is already implemented with
-    `baldr <https://github.com/python-odin/baldr>`_. Odin Web is an evolution of the design of baldr and will
-    be swapped in favour of OdinWeb in the future. Baldr also includes other integration with Django.
+  `baldr <https://github.com/python-odin/baldr>`_. Odin Web is an evolution of the design of baldr and will
+  be swapped in favour of OdinWeb in the future. Baldr also includes other integration with Django.
 
 There are no plans at this point for other libraries although I'm open to suggestions/contributions. The effort
 required to integrate other libraries is minimal as Odin Web was designed to be agnostic of the framework it is
