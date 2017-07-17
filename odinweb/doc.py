@@ -19,22 +19,6 @@ __all__ = (
 )
 
 
-class ResourceApiDoc(object):
-    @classmethod
-    def bind(cls, obj):
-        # type: (object) -> ResourceApiDoc
-        docs = getattr(obj, '__docs__', None)
-        if docs is None:
-            docs = cls(obj)
-            setattr(obj, '__docs__', docs)
-        return docs
-
-    __slots__ = ('resource_api',)
-
-    def __init__(self, resource_api):
-        self.resource_api = resource_api
-
-
 class OperationDoc(object):
     """
     Utility class for building/storing documentation on callback endpoints.
@@ -42,18 +26,18 @@ class OperationDoc(object):
     @classmethod
     def bind(cls, func):
         # type: (func) -> cls
-        docs = getattr(func, '_api_docs', None)
+        docs = getattr(func, '__docs', None)
         if docs is None:
             docs = cls(func)
-            setattr(func, '_api_docs', docs)
+            setattr(func, '__docs', docs)
         return docs
 
-    __slots__ = ('callback', 'summary', 'tags', 'consumes', 'produces', 'parameters', 'responses', 'deprecated')
+    __slots__ = ('callback', 'summary', 'tags', 'consumes', 'produces', '_parameters', 'responses', 'deprecated')
 
     def __init__(self, callback):
         self.callback = callback
         self.deprecated = None
-        self.parameters = {}
+        self._parameters = {}
         self.responses = {
             'default': {
                 'description': 'Error',
@@ -65,34 +49,108 @@ class OperationDoc(object):
         self.summary = None
         self.tags = set()
 
-    def add_parameter(self, name, in_, **options):
+    def to_dict(self, parent=None):
+        return dict_filter(
+            operationId=self.operation_id,
+            description=self.description,
+            deprecated=True if self.deprecated else None,
+            parameters=self.parameters,
+            responses=self.responses if self.responses else None,
+            produces=list(self.produces) if self.produces else None,
+            tags=list(self.tags) if self.tags else None,
+        )
+
+    @property
+    def operation_id(self):
+        return self.callback.__name__
+
+    @property
+    def description(self):
+        return (self.callback.__doc__ or '').strip()
+
+    @property
+    def parameters(self):
+        return self.parameters.values() if self.parameters else None
+
+    #################################################################
+    # Parameters
+
+    def add_param(self, name, in_, **options):
+        # type: (name, In, **Any) -> None
+        """
+        Add parameter, you should probably use on of :meth:`path_param`, :meth:`query_param`,
+        :meth:`body_param`, or :meth:`header_param`.
+        """
         # Ensure there are no duplicates
-        param = self.parameters.setdefault("{}:{}".format(in_, name), {'name': name, 'in': in_})
+        param = self._parameters.setdefault("{}:{}".format(in_.value, name), {'name': name, 'in': in_.value})
         dict_filter_update(param, options)
+
+    def path_param(self, name, type, description=None,
+                   default=None, minimum=None, maximum=None, enum=None, **options):
+        """
+        Add Path parameter
+        """
+        self.add_param(
+            name, In.Path,
+            type=type.value,
+            description=description,
+            default=default,
+            minimum=minimum, maximum=maximum,
+            enum=enum,
+            **options
+        )
+
+    def query_param(self, name, type, description=None, required=False,
+                    default=None, minimum=None, maximum=None, enum=None, **options):
+        """
+        Add Query parameter
+        """
+        self.add_param(
+            name, In.Query,
+            type=type.value,
+            description=description,
+            required=required or None,
+            default=default,
+            minimum=minimum, maximum=maximum,
+            enum=enum,
+            **options
+        )
 
     def body_param(self, resource, description=None, default=None, **options):
         """
         Set the body param
         """
-        schema = {'$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)} if resource else None
-        self.add_parameter('body', In.Body.value, description=description, schema=schema, default=default, **options)
+        self.add_param(
+            'body', In.Body,
+            description=description,
+            schema={'$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)} if resource else None,
+            default=default,
+            **options
+        )
+
+    def header_param(self, name, type, description=None, default=None, required=False, **options):
+        """
+        Add a header parameter
+        """
+        self.add_param(
+            name, In.Header,
+            type=type.value,
+            description=description,
+            default=default,
+            required=required or None
+            **options
+        )
+
+    #################################################################
+    # Responses
 
     def add_response(self, status, description, resource=None):
-        response_spec = {'description': description}
-        if resource:
-            response_spec['schema'] = {'$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)}
+        if isinstance(status, HTTPStatus):
+            status = status.value
 
-        self.responses[status] = response_spec
-
-    def to_dict(self):
-        return dict_filter(
-            operationId=self.callback.__name__,
-            description=(self.callback.__doc__ or '').strip(),
-            deprecated=True if self.deprecated else None,
-            parameters=self.parameters.values() if self.parameters else None,
-            responses=self.responses if self.responses else None,
-            produces=list(self.produces) if self.produces else None,
-            tags=list(self.tags) if self.tags else None,
+        self.responses[status] = dict_filter(
+            description=description,
+            schema={'$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)} if resource else None
         )
 
 
@@ -112,48 +170,27 @@ def operation(summary=None, tags=None, deprecated=False):
     return inner
 
 
-def query_param(name, type, description=None, required=False,
-                default=None, minimum=None, maximum=None, enum=None, **options):
+def query_param(name, type, description=None, required=False, default=None,
+                minimum=None, maximum=None, enum=None, **options):
     """
-    Query parameter documentation. 
-    
-    :param name: 
-    :param type: 
-    :param description: 
-    :param required: 
-    :param default:
-    :param minimum:
-    :param maximum:
-    :param enum:
-
+    Query parameter documentation.
     """
     def inner(func):
-        OperationDoc.bind(func).add_parameter(
-            name, In.Query.value, type=type.value, description=description, required=required or None,
-            default=default, minimum=minimum, maximum=maximum, enum=enum, **options)
+        OperationDoc.bind(func).query_param(
+            name, type, description, required, default, minimum, maximum, enum, **options
+        )
         return func
     return inner
 
 
-def path_param(name, type, description=None,
-               default=None, minimum=None, maximum=None, enum=None, **options):
+def path_param(name, type, description=None, default=None, minimum=None,
+               maximum=None, enum=None, **options):
     """
-    Path parameter documentation. 
-    
-    :param name: 
-    :param type: 
-    :param description: 
-    :param default: 
-    :param minimum: 
-    :param maximum: 
-    :param enum: 
-    :param options: 
-
+    Path parameter documentation.
     """
     def inner(func):
-        OperationDoc.bind(func).add_parameter(
-            name, In.Path.value, type=type.value, description=description,
-            default=default, minimum=minimum, maximum=maximum, enum=enum, **options
+        OperationDoc.bind(func).path_param(
+            name, type, description, default, minimum, maximum, enum, **options
         )
         return func
     return inner
@@ -162,12 +199,6 @@ def path_param(name, type, description=None,
 def body(resource=None, description=None, default=None, **options):
     """
     Body parameter documentation. 
-    
-    :param resource: 
-    :param description: 
-    :param default: 
-    :param options: 
-
     """
     def inner(func):
         OperationDoc.bind(func).body_param(resource, description, default, **options)
@@ -175,21 +206,12 @@ def body(resource=None, description=None, default=None, **options):
     return inner
 
 
-def header_param(name, type, description=None, required=False, **options):
+def header_param(name, type, description=None, default=None, required=False, **options):
     """
     Header parameter documentation. 
-
-    :param name: 
-    :param type: 
-    :param description: 
-    :param required:
-    :param options: 
-
     """
     def inner(func):
-        OperationDoc.bind(func).add_parameter(
-            name, In.Query.value, type=type.value, description=description, required=required or None,
-            **options)
+        OperationDoc.bind(func).header_param(name, type, description, default, required, **options)
         return func
     return inner
 

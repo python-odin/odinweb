@@ -32,7 +32,7 @@ _route_count = 0
 RouteDefinition = namedtuple("RouteDefinition", 'route_number path_type methods sub_path callback')
 
 
-def route(func=None, path_type=PathType.Collection, methods=Method.Get, resource=None, sub_path=None):
+def route(func=None, path_type=PathType.Collection, methods=Method.GET, resource=None, sub_path=None):
     """
     Decorator for defining an API route. Usually one of the helpers (listing, detail, update, delete) would be
     used in place of the route decorator.
@@ -42,7 +42,7 @@ def route(func=None, path_type=PathType.Collection, methods=Method.Get, resource
         class ItemApi(ResourceApi):
             resource = Item
 
-            @route(path=PathType.Collection, methods=Method.Get)
+            @route(path=PathType.Collection, methods=Method.GET)
             def list_items(self, request):
                 ...
                 return items
@@ -85,7 +85,7 @@ def route(func=None, path_type=PathType.Collection, methods=Method.Get, resource
 collection = collection_action = action = route
 
 
-def resource_route(func=None, method=Method.Get, resource=None, sub_path=None):
+def resource_route(func=None, method=Method.GET, resource=None, sub_path=None):
     return route(func, PathType.Resource, method, resource, sub_path)
 
 resource_action = detail_action = resource_route
@@ -103,12 +103,10 @@ def list_response(func=None, max_offset=None, default_offset=0, max_limit=None, 
     """
     def inner(f):
         docs = OperationDoc.bind(f)
-        docs.add_parameter('offset', In.Query.value, type=Type.Integer.value,
-                           default=default_offset, minimum=0, maximum=max_offset)
-        docs.add_parameter('limit', In.Query.value, type=Type.Integer.value,
-                           default=default_limit, minimum=1, maximum=max_limit)
-        docs.add_parameter('bare', In.Query.value, type=Type.Boolean.value, default=False)
-        docs.add_response(200, 'OK', Listing)
+        docs.query_param('offset', Type.Integer, "Offset of first value", False, default_offset, 0, max_offset)
+        docs.query_param('limit', Type.Integer, "Number of returned values", False, default_limit, 1, max_limit)
+        docs.query_param('bare', Type.Boolean, "Return without list container", False, False)
+        docs.add_response(HTTPStatus.OK, 'OK', Listing)
 
         @wraps(f)
         def wrapper(self, request, *args, **kwargs):
@@ -162,7 +160,7 @@ def resource_request(func=None, resource=None):
 
 # Shortcut methods
 
-def listing(func=None, resource=Listing, max_offset=None, default_offset=0, max_limit=None, default_limit=50):
+def listing(f=None, resource=Listing, max_offset=None, default_offset=0, max_limit=None, default_limit=50):
     """
     Decorator to indicate a listing endpoint.
 
@@ -176,7 +174,7 @@ def listing(func=None, resource=Listing, max_offset=None, default_offset=0, max_
                 ...
                 return items
 
-    :param func: Function we are routing
+    :param f: Function we are routing
     :param resource: Specify the resource that this function
         encodes/decodes, default is the one specified on the ResourceAPI
         instance.
@@ -184,72 +182,89 @@ def listing(func=None, resource=Listing, max_offset=None, default_offset=0, max_
     :param default_limit: Default value for limiting the response size.
 
     """
-    return route(
-        list_response(func, max_offset, default_offset, max_limit, default_limit),
-        PathType.Collection, Method.Get, resource
-    )
+    def inner(func):
+        return route(
+            list_response(func, max_offset, default_offset, max_limit, default_limit),
+            PathType.Collection, Method.GET, resource
+        )
+    return inner(f) if f else inner
 
 
-def create(func=None, resource=None):
+def create(f=None, resource=None):
     """
     Decorator to indicate a creation endpoint.
 
-    :param func: Function we are routing
+    :param f: Function we are routing
     :param resource: Specify the resource that this function
         encodes/decodes, default is the one specified on the ResourceAPI
         instance.
 
     """
-    return route(resource_request(func, resource), PathType.Collection, Method.Post, resource)
+    def inner(func):
+        OperationDoc.bind(func).add_response(HTTPStatus.CREATED, "Resource has been created", resource)
+        return route(resource_request(func, resource), PathType.Collection, Method.POST, resource)
+    return inner(f) if f else inner
 
 
-def detail(func=None, resource=None):
+def detail(f=None, resource=None):
     """
     Decorator to indicate a detail endpoint.
 
-    :param func: Function we are routing
+    :param f: Function we are routing
     :param resource: Specify the resource that this function
         encodes/decodes, default is the one specified on the ResourceAPI
         instance.
 
     """
-    return route(func, PathType.Resource, Method.Get, resource)
+    def inner(func):
+        OperationDoc.bind(func).add_response(HTTPStatus.OK, "Get a resource", resource)
+        return route(func, PathType.Resource, Method.GET, resource)
+    return inner(f) if f else inner
 
 
-def update(func=None, resource=None):
+def update(f=None, resource=None):
     """
     Decorator to indicate an update endpoint.
 
-    :param func: Function we are routing
+    :param f: Function we are routing
     :param resource: Specify the resource that this function
         encodes/decodes, default is the one specified on the ResourceAPI
         instance.
 
     """
-    return route(resource_request(func, resource), PathType.Resource, Method.Put, resource)
+    def inner(func):
+        OperationDoc.bind(func).add_response(HTTPStatus.OK, "Resource has been updated.", resource)
+        return route(resource_request(func, resource), PathType.Resource, Method.PUT, resource)
+    return inner(f) if f else inner
 
 
-def patch(func=None, resource=None):
+def patch(f=None, resource=None):
     """
     Decorator to indicate a patch endpoint.
 
-    :param func: Function we are routing
+    :param f: Function we are routing
     :param resource: Specify the resource that this function
         encodes/decodes, default is the one specified on the ResourceAPI
         instance.
 
     """
-    return route(resource_request(func, resource), PathType.Resource, Method.Patch, resource)
+    def inner(func):
+        OperationDoc.bind(func).add_response(HTTPStatus.OK, "Resource has been patched.", resource)
+        return route(resource_request(func, resource), PathType.Resource, Method.PATCH, resource)
+    return inner(f) if f else inner
 
 
-def delete(func=None, resource=None):
+def delete(f=None, resource=None):
     """
     Decorator to indicate a deletion endpoint.
 
-    :param func: Function we are routing
+    :param f: Function we are routing
     :param resource: Specify the resource that this function
         encodes/decodes, default is the one specified on the ResourceAPI
         instance.
 
     """
-    return route(func, PathType.Resource, Method.Delete, resource)
+    def inner(func):
+        OperationDoc.bind(func).add_response(HTTPStatus.NO_CONTENT, "Resource has been deleted.")
+        return route(func, PathType.Resource, Method.DELETE, resource)
+    return inner(f) if f else inner
