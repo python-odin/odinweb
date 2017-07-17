@@ -5,7 +5,7 @@ from .constants import *
 
 # Used to define path nodes
 PathNode = namedtuple('PathNode', 'name type type_args')
-PathNode.__new__.__defaults__ = (None, None, None)
+PathNode.__new__.__defaults__ = (None, Type.Integer, None)
 
 # Generic definition for a route to an API endpoint
 ApiRoute = namedtuple("ApiRoute", 'path methods callback')
@@ -19,7 +19,8 @@ class HttpResponse(object):
 
     @classmethod
     def from_status(cls, http_status, headers=None):
-        return cls(http_status.description, http_status, headers)
+        # type: (HTTPStatus, **str) -> HttpResponse
+        return cls(http_status.description or http_status.phrase, http_status, headers)
 
     def __init__(self, body, status=HTTPStatus.OK, headers=None):
         self.body = body
