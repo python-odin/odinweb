@@ -5,16 +5,17 @@ Documentation Decorators
 Additional decorators for improving documentation of APIs.
 
 """
+from typing import Any
 from odin.utils import getmeta
 from odinweb.utils import dict_filter, dict_filter_update
 
 from . import _compat
-from .constants import *
+from .constants import In, HTTPStatus
 
 __all__ = (
     # Docs
     'OperationDoc', 'operation',
-    'query_param', 'body_param', 'path_param', 'header_param',
+    'query_param', 'path_param', 'body', 'header_param',
     'response', 'produces'
 )
 
@@ -70,7 +71,7 @@ class OperationDoc(object):
 
     @property
     def parameters(self):
-        return self.parameters.values() if self.parameters else None
+        return self._parameters.values() if self._parameters else None
 
     #################################################################
     # Parameters
@@ -85,34 +86,34 @@ class OperationDoc(object):
         param = self._parameters.setdefault("{}:{}".format(in_.value, name), {'name': name, 'in': in_.value})
         dict_filter_update(param, options)
 
-    def path_param(self, name, type, description=None,
-                   default=None, minimum=None, maximum=None, enum=None, **options):
+    def path_param(self, name, type_, description=None,
+                   default=None, minimum=None, maximum=None, enum_=None, **options):
         """
         Add Path parameter
         """
         self.add_param(
             name, In.Path,
-            type=type.value,
+            type=type_.value,
             description=description,
             default=default,
             minimum=minimum, maximum=maximum,
-            enum=enum,
+            enum=enum_,
             **options
         )
 
-    def query_param(self, name, type, description=None, required=False,
-                    default=None, minimum=None, maximum=None, enum=None, **options):
+    def query_param(self, name, type_, description=None, required=False,
+                    default=None, minimum=None, maximum=None, enum_=None, **options):
         """
         Add Query parameter
         """
         self.add_param(
             name, In.Query,
-            type=type.value,
+            type=type_.value,
             description=description,
             required=required or None,
             default=default,
             minimum=minimum, maximum=maximum,
-            enum=enum,
+            enum=enum_,
             **options
         )
 
@@ -128,16 +129,16 @@ class OperationDoc(object):
             **options
         )
 
-    def header_param(self, name, type, description=None, default=None, required=False, **options):
+    def header_param(self, name, type_, description=None, default=None, required=False, **options):
         """
         Add a header parameter
         """
         self.add_param(
             name, In.Header,
-            type=type.value,
+            type=type_.value,
             description=description,
             default=default,
-            required=required or None
+            required=required or None,
             **options
         )
 
@@ -196,12 +197,12 @@ def path_param(name, type, description=None, default=None, minimum=None,
     return inner
 
 
-def body(resource=None, description=None, default=None, **options):
+def body(description=None, default=None, **options):
     """
     Body parameter documentation. 
     """
     def inner(func):
-        OperationDoc.bind(func).body_param(resource, description, default, **options)
+        OperationDoc.bind(func).body_param(description, default, **options)
         return func
     return inner
 
