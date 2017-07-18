@@ -30,14 +30,15 @@ class OperationDoc(object):
         # type: (func) -> cls
         docs = getattr(func, '__docs', None)
         if docs is None:
-            docs = cls(func)
+            docs = cls()
             setattr(func, '__docs', docs)
+        docs.callback = func
         return docs
 
     __slots__ = ('callback', 'summary', 'tags', 'consumes', 'produces', '_parameters', 'responses', 'deprecated')
 
-    def __init__(self, callback):
-        self.callback = callback
+    def __init__(self):
+        self.callback = None
         self.deprecated = None
         self._parameters = defaultdict(lambda: defaultdict(dict))
         self.responses = {
