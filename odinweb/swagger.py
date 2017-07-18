@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import itertools
+import collections
 import os
 
 from odin import fields
@@ -142,7 +143,7 @@ class SwaggerSpec(api.ResourceApi):
         def parse_node(node):
             return "{{{}}}".format(node.name) if isinstance(node, api.PathNode) else str(node)
 
-        paths = {}
+        paths = collections.OrderedDict()
         for api_route in api_base.api_routes(api_base.path_prefix[1:]):
             # We need to iterate this multiple times so convert to tuple
             api_route_path = tuple(api_route.path)

@@ -5,6 +5,7 @@ Documentation Decorators
 Additional decorators for improving documentation of APIs.
 
 """
+from collections import defaultdict
 from typing import Any
 from odin.utils import getmeta
 from odinweb.utils import dict_filter, dict_filter_update
@@ -38,7 +39,7 @@ class OperationDoc(object):
     def __init__(self, callback):
         self.callback = callback
         self.deprecated = None
-        self._parameters = {}
+        self._parameters = defaultdict(lambda: defaultdict(dict))
         self.responses = {
             'default': {
                 'description': 'Error',
@@ -71,7 +72,21 @@ class OperationDoc(object):
 
     @property
     def parameters(self):
-        return self._parameters.values() if self._parameters else None
+        results = []
+
+        for param_type in (In.Path, In.Header, In.Query, In.Form):
+            results.extend(self._parameters[param_type].values())
+
+        if In.Body in self._parameters:
+            body_param = self._parameters[In.Body]
+            resource = getattr(self.callback, 'resource', None)
+            if resource:
+                body_param['schema'] = {
+                    '$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)
+                }
+            results.append(body_param)
+
+        return results or None
 
     #################################################################
     # Parameters
@@ -82,9 +97,7 @@ class OperationDoc(object):
         Add parameter, you should probably use on of :meth:`path_param`, :meth:`query_param`,
         :meth:`body_param`, or :meth:`header_param`.
         """
-        # Ensure there are no duplicates
-        param = self._parameters.setdefault("{}:{}".format(in_.value, name), {'name': name, 'in': in_.value})
-        dict_filter_update(param, options)
+        dict_filter_update(self._parameters[in_][name], options)
 
     def path_param(self, name, type_, description=None,
                    default=None, minimum=None, maximum=None, enum_=None, **options):
@@ -92,12 +105,8 @@ class OperationDoc(object):
         Add Path parameter
         """
         self.add_param(
-            name, In.Path,
-            type=type_.value,
-            description=description,
-            default=default,
-            minimum=minimum, maximum=maximum,
-            enum=enum_,
+            name, In.Path, type=type_.value, description=description,
+            default=default, minimum=minimum, maximum=maximum, enum=enum_,
             **options
         )
 
@@ -107,26 +116,18 @@ class OperationDoc(object):
         Add Query parameter
         """
         self.add_param(
-            name, In.Query,
-            type=type_.value,
-            description=description,
-            required=required or None,
-            default=default,
-            minimum=minimum, maximum=maximum,
-            enum=enum_,
+            name, In.Query, type=type_.value, description=description,
+            required=required or None, default=default, minimum=minimum, maximum=maximum, enum=enum_,
             **options
         )
 
-    def body_param(self, resource, description=None, default=None, **options):
+    def body_param(self, description=None, default=None, **options):
         """
         Set the body param
         """
-        self.add_param(
-            'body', In.Body,
-            description=description,
-            schema={'$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)} if resource else None,
-            default=default,
-            **options
+        self._parameters[In.Body] = dict_filter(
+            {'name': 'body', 'in': In.Body.value, 'description': description, 'default': default},
+            options
         )
 
     def header_param(self, name, type_, description=None, default=None, required=False, **options):
@@ -134,11 +135,8 @@ class OperationDoc(object):
         Add a header parameter
         """
         self.add_param(
-            name, In.Header,
-            type=type_.value,
-            description=description,
+            name, In.Header, type=type_.value, description=description, required=required or None,
             default=default,
-            required=required or None,
             **options
         )
 
