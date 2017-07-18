@@ -139,18 +139,18 @@ def list_response(func=None, max_offset=None, default_offset=0, max_limit=None, 
     return inner(func) if func else inner
 
 
-def resource_request(func=None, resource=None):
+def resource_request(func=None):
     """
     Handle processing a request with a resource body. 
     
     It is assumed decorator will operate on a class method.
     """
     def inner(f):
-        OperationDoc.bind(f).body_param(resource)
+        OperationDoc.bind(f).body_param()
 
         @wraps(f)
         def wrapper(self, request, *args, **kwargs):
-            item = self.get_resource(request, resource=resource or self.resource)
+            item = self.get_resource(request, resource=f.resource)
             return f(self, request, item, *args, **kwargs)
 
         return wrapper
@@ -202,7 +202,7 @@ def create(f=None, resource=None):
     """
     def inner(func):
         OperationDoc.bind(func).add_response(HTTPStatus.CREATED, "Resource has been created", resource)
-        return route(resource_request(func, resource), PathType.Collection, Method.POST, resource)
+        return route(resource_request(func), PathType.Collection, Method.POST, resource)
     return inner(f) if f else inner
 
 
