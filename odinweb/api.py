@@ -73,12 +73,23 @@ class ResourceApiMeta(type):
             # If this isn't a subclass of don't do anything special.
             return super_new(mcs, name, bases, attrs)
 
+        # Determine the resource used by this API (handle inherited resources)
+        api_resource = attrs.get('resource')
+        if api_resource is None:
+            for base in bases:
+                api_resource = base.resource
+                if api_resource:
+                    break
+
         routes = []
 
         # Get local routes and sort them by route number
         for view, obj in attrs.items():
             if callable(obj) and hasattr(obj, 'route'):
                 routes.append(obj.route)
+                # Assign resource to callback if undefined
+                if not getattr(obj, 'resource'):
+                    obj.resource = api_resource
                 del obj.route
 
         # Get routes from parent objects
