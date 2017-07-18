@@ -83,7 +83,10 @@ class SwaggerSpec(api.ResourceApi):
     """
     Resource API instance that generates a Swagger spec of the current API.
     """
+    SWAGGER_TAG = 'swagger'
+
     api_name = 'swagger'
+    tags = (SWAGGER_TAG, )
 
     def __init__(self, title, enable_ui=False, host=None, schemes=None):
         super(SwaggerSpec, self).__init__()
@@ -150,15 +153,19 @@ class SwaggerSpec(api.ResourceApi):
 
             # Add path spec object
             path = '/' + '/'.join(parse_node(p) for p in api_route_path)
-            path_spec = paths.setdefault(path, {})
-
-            # Add path parameters
-            parameters = self.generate_parameters(api_route_path)
-            if parameters:
-                path_spec['parameters'] = parameters
 
             # Generate operation spec
             docs = doc.OperationDoc.bind(api_route.callback)
+
+            # Filter out swagger endpoints
+            if self.SWAGGER_TAG in docs.tags:
+                continue
+
+            # Add path parameters
+            path_spec = paths.setdefault(path, {})
+            parameters = self.generate_parameters(api_route_path)
+            if parameters:
+                path_spec['parameters'] = parameters
 
             # Add methods
             for method in api_route.methods:
@@ -178,7 +185,7 @@ class SwaggerSpec(api.ResourceApi):
         return definitions
 
     @api.route
-    @doc.operation(tags=('swagger-ui',))
+    @doc.operation(tags=('swagger',))
     @doc.response(200, "Swagger JSON of this API")
     def get_swagger(self, request):
         """
@@ -218,7 +225,7 @@ class SwaggerSpec(api.ResourceApi):
         except OSError:
             raise api.HttpError(404, 40401, "Not found")
 
-    @doc.operation(tags=('swagger-ui',))
+    @doc.operation(tags=('swagger',))
     @doc.response(200, "HTML content")
     @doc.produces('text/html')
     def get_ui(self, request):
@@ -232,7 +239,7 @@ class SwaggerSpec(api.ResourceApi):
             self._ui_cache = content.replace(u"{{SWAGGER_PATH}}", self.swagger_path)
         return api.HttpResponse(self._ui_cache, headers={'ContentType': 'text/html'})
 
-    @doc.operation(tags=('swagger-ui',))
+    @doc.operation(tags=('swagger',))
     @doc.response(200, "HTML content")
     def get_static(self, request, file_name=None):
         """
