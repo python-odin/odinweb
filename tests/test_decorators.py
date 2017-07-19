@@ -38,9 +38,10 @@ class TestListing(object):
         def my_func():
             pass
 
-        assert getattr(my_func, '__docs')._parameters['query:offset']['default'] == offset
-        assert getattr(my_func, '__docs')._parameters['query:limit']['default'] == limit
-        assert not getattr(my_func, '__docs')._parameters['query:bare']['default']
+        query = getattr(my_func, '__docs')._parameters[In.Query]
+        assert query['offset']['default'] == offset
+        assert query['limit']['default'] == limit
+        assert not query['bare']['default']
 
     @pytest.mark.parametrize('options, query, offset, limit, bare', (
         ({}, {}, 0, 50, False),
