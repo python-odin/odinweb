@@ -52,7 +52,7 @@ class OperationDoc(object):
         self.summary = None
         self.tags = set()
 
-    def to_dict(self, parent=None):
+    def to_dict(self):
         return dict_filter(
             operationId=self.operation_id,
             description=self.description,

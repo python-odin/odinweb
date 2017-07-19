@@ -234,7 +234,7 @@ def update(f=None, resource=None):
     """
     def inner(func):
         OperationDoc.bind(func).add_response(HTTPStatus.OK, "Resource has been updated.", resource)
-        return route(resource_request(func, resource), PathType.Resource, Method.PUT, resource)
+        return route(resource_request(func), PathType.Resource, Method.PUT, resource)
     return inner(f) if f else inner
 
 
@@ -250,7 +250,7 @@ def patch(f=None, resource=None):
     """
     def inner(func):
         OperationDoc.bind(func).add_response(HTTPStatus.OK, "Resource has been patched.", resource)
-        return route(resource_request(func, resource), PathType.Resource, Method.PATCH, resource)
+        return route(resource_request(func), PathType.Resource, Method.PATCH, resource)
     return inner(f) if f else inner
 
 
