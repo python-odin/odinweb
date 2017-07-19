@@ -10,7 +10,7 @@ from odinweb import api, doc
 from odinweb import resources
 from odinweb._compat import *
 from odinweb.constants import *
-from odinweb.decorators import RouteDefinition
+from odinweb.decorators import RouteDefinition, Operation
 from odinweb.utils import dict_filter
 
 DATA_TYPE_MAP = {
@@ -89,20 +89,21 @@ class SwaggerSpec(api.ResourceApi):
     tags = (SWAGGER_TAG, )
 
     def __init__(self, title, enable_ui=False, host=None, schemes=None):
+        # Register UI routes
+        if enable_ui:
+            self._operations.append(Operation(
+                SwaggerSpec.get_ui, api.PathType.Collection, Method.GET, None, 'ui'
+            ))
+            self._operations.append(Operation(
+                SwaggerSpec.get_static, api.PathType.Collection, Method.GET, None,
+                ('ui', api.PathNode('file_name', api.Type.String))
+            ))
+
         super(SwaggerSpec, self).__init__()
         self.title = title
         self.enable_ui = enable_ui
         self.host = host
         self.schemes = schemes
-
-        # Register UI routes
-        if enable_ui:
-            self._routes.append(RouteDefinition(
-                0, api.PathType.Collection, (Method.GET.value,), ('ui',),
-                SwaggerSpec.get_ui))
-            self._routes.append(RouteDefinition(
-                0, api.PathType.Collection, (Method.GET.value,), ('ui', api.PathNode('file_name', api.Type.String)),
-                SwaggerSpec.get_static))
 
         self._ui_cache = None
 
@@ -155,7 +156,7 @@ class SwaggerSpec(api.ResourceApi):
             path = '/' + '/'.join(parse_node(p) for p in api_route_path)
 
             # Generate operation spec
-            docs = doc.OperationDoc.bind(api_route.callback)
+            docs = doc.OperationDoc.bind(api_route.operation)
 
             # Filter out swagger endpoints
             if self.SWAGGER_TAG in docs.tags:

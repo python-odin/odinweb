@@ -65,7 +65,7 @@ class OperationDoc(object):
 
     @property
     def operation_id(self):
-        return self.callback.__name__
+        return self.callback.operation_id
 
     @property
     def description(self):

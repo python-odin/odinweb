@@ -81,25 +81,21 @@ class ResourceApiMeta(type):
                 if api_resource:
                     break
 
-        routes = []
-
-        # Get local routes and sort them by route number
+        # Get operations
+        operations = []
         for view, obj in attrs.items():
-            if callable(obj) and hasattr(obj, 'route'):
-                routes.append(obj.route)
-                # Assign resource to callback if undefined
-                if not getattr(obj, 'resource'):
-                    obj.resource = api_resource
-                del obj.route
+            if isinstance(obj, Operation):
+                operations.append(obj)
 
         # Get routes from parent objects
         for parent in parents:
-            if hasattr(parent, '_routes'):
-                routes.extend(parent._routes)
+            if hasattr(parent, '_operations'):
+                operations.extend(parent._operations)
 
-        attrs['_routes'] = sorted(routes, key=lambda o: o.route_number)
+        new_class = super_new(mcs, name, bases, attrs)
+        new_class._operations = sorted(operations, key=hash)
 
-        return super_new(mcs, name, bases, attrs)
+        return new_class
 
 
 class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
@@ -164,6 +160,9 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
 
         self._api_routes = None
 
+        for operation in self._operations:
+            operation.bind_to_instance(self)
+
     @property
     def debug_enabled(self):
         """
@@ -178,18 +177,14 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
         Return implementation independent routes 
         """
         if self._api_routes is None:
-            api_routes = []
-            for route_ in self._routes:
-                path = list(self.path_prefix) + [self.api_name]
+            operations = []
 
-                if route_.path_type == PathType.Resource:
-                    path.append(PathNode(self.resource_id_name, self.resource_id_type, None))
+            for operation in self._operations:
+                methods = tuple(m.value for m in operation.methods)
+                operation.callback = self._wrap_callback(operation.callback, methods)
+                operations.append(ApiRoute(operation.path, methods, operation))
 
-                if route_.sub_path:
-                    path += route_.sub_path
-
-                api_routes.append(ApiRoute(path, route_.methods, self._wrap_callback(route_.callback, route_.methods)))
-            self._api_routes = api_routes
+            self._api_routes = operations
 
         return self._api_routes
 
@@ -413,7 +408,7 @@ class ApiContainer(object):
                 # Add any route specific resources
                 resources.update(r.callback.resource
                                  for r in endpoint.api_routes()
-                                 if getattr(r.callback, 'resource', None))
+                                 if getattr(r.operation, 'resource', None))
 
             elif isinstance(endpoint, ApiContainer):
                 resources.update(endpoint.referenced_resources())
@@ -467,7 +462,7 @@ class ApiInterfaceBase(ApiContainer):
 
         for api_route in self.api_routes():
             path = '/'.join(parse_node(p) for p in api_route.path)
-            yield ApiRoute(path, api_route.methods, api_route.callback)
+            yield ApiRoute(path, api_route.methods, api_route.operation)
 
     def parse_node(self, node):
         raise NotImplementedError()

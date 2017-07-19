@@ -8,7 +8,7 @@ PathNode = namedtuple('PathNode', 'name type type_args')
 PathNode.__new__.__defaults__ = (None, Type.Integer, None)
 
 # Generic definition for a route to an API endpoint
-ApiRoute = namedtuple("ApiRoute", 'path methods callback')
+ApiRoute = namedtuple("ApiRoute", 'path methods operation')
 
 
 class HttpResponse(object):

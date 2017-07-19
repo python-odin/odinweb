@@ -7,16 +7,22 @@ A collection of decorators for identifying the various types of route.
 """
 from __future__ import absolute_import
 
+from typing import Callable, Union, Tuple, Type
 from collections import namedtuple
 from functools import wraps
 
+from odin import Resource
+from odin.utils import force_tuple, lazy_property
+
 from odinweb.utils import to_bool
+from odinweb.data_structures import PathNode
 from . import _compat
 from .doc import OperationDoc
 from .constants import *
 from .resources import Listing
 
 __all__ = (
+    'Operation',
     # Basic routes
     'route', 'collection', 'collection_action', 'resource_route', 'resource_action',
     # Handlers
@@ -32,10 +38,10 @@ _route_count = 0
 RouteDefinition = namedtuple("RouteDefinition", 'route_number path_type methods sub_path callback')
 
 
-def route(func=None, path_type=PathType.Collection, methods=Method.GET, resource=None, sub_path=None):
+class Operation(object):
     """
-    Decorator for defining an API route. Usually one of the helpers (listing, detail, update, delete) would be
-    used in place of the route decorator.
+    Decorator for defining an API operation. Usually one of the helpers (listing, detail, update, delete) would be
+    used in place of this route decorator.
 
     Usage::
 
@@ -47,46 +53,76 @@ def route(func=None, path_type=PathType.Collection, methods=Method.GET, resource
                 ...
                 return items
 
-    :param func: Function we are routing
-    :param sub_path: A sub path that can be used as a action.
-    :param path_type: Type of path, list/detail or custom.
-    :param methods: HTTP method(s) this function responses to.
-    :type methods: str | tuple(str) | list(str)
-    :param resource: Specify the resource that this function encodes/decodes,
-        default is the one specified on the ResourceAPI instance.
-
     """
-    if isinstance(methods, (tuple, list)):
-        methods = tuple(method.value if isinstance(method, Method) else method for method in methods)
-    elif isinstance(methods, Method):
-        methods = (methods.value,)
-    elif isinstance(methods, _compat.string_types):
-        methods = (methods,)
+    _operation_count = 0
 
-    # Generate a route number
-    global _route_count
-    route_number = _route_count
-    _route_count += 1
+    @classmethod
+    def decorate(cls, func=None, path_type=PathType.Collection, method=Method.GET, resource=None, sub_path=None):
+        # type: (Callable, PathType, Union(Method, Tuple(Union)), Type[Resource], Union[Union(str, PathNode), Tuple(Union(str, PathNode))]) -> Operation
+        """
+        :param func: Function we are routing
+        :param sub_path: A sub path that can be used as a action.
+        :param path_type: Type of path, list/detail or custom.
+        :param methods: HTTP method(s) this function responses to.
+        :type methods: str | tuple(str) | list(str)
+        :param resource: Specify the resource that this function encodes/decodes,
+            default is the one specified on the ResourceAPI instance.
+        """
+        def wrapper(f):
+            return cls(f, path_type, method, resource, sub_path)
+        return wrapper(func) if func else wrapper
 
-    if sub_path:
-        # If we have a sub path normalise it into a tuple.
-        if isinstance(sub_path, _compat.string_types):
-            sub_path = (sub_path,)
-        elif not isinstance(sub_path, (list, tuple)):
-            sub_path = tuple(sub_path,)
+    def __init__(self, callback, path_type, method, resource, sub_path):
+        # type: (Callable, PathType, Union(Method, Tuple(Union)), Type[Resource], Union[Union(str, PathNode), Tuple(Union(str, PathNode))]) -> None
+        self.callback = callback
+        self.path_type = path_type
+        self.methods = force_tuple(method)
+        self.resource = resource
+        self.sub_path = force_tuple(sub_path)
 
-    def inner(f):
-        f.route = RouteDefinition(route_number, path_type, methods, sub_path, f)
-        f.resource = resource
-        return f
+        self._hash_id = Operation._operation_count
+        Operation._operation_count += 1
 
-    return inner(func) if func else inner
+        self.resource_api = None
 
-collection = collection_action = action = route
+    def __hash__(self):
+        return self._hash_id
+
+    def __call__(self, *args, **kwargs):
+        return self.callback(*args, **kwargs)
+
+    @property
+    def is_bound(self):
+        # type: () -> bool
+        """
+        Operation is bound to a resource api
+        """
+        return self.resource_api is not None
+
+    @lazy_property
+    def operation_id(self):
+        return self.callback.__name__
+
+    @lazy_property
+    def path(self):
+        resource_api = self.resource_api
+
+        path = list(resource_api.path_prefix) + [resource_api.api_name]
+
+        if self.path_type == PathType.Resource:
+            path.append(PathNode(resource_api.resource_id_name, resource_api.resource_id_type, None))
+
+        return path + list(self.sub_path or [])
+
+    def bind_to_instance(self, instance):
+        self.resource_api = instance
+
+
+collection = collection_action = action = route = Operation.decorate
 
 
 def resource_route(func=None, method=Method.GET, resource=None, sub_path=None):
-    return route(func, PathType.Resource, method, resource, sub_path)
+    return Operation.decorate(func, PathType.Resource, method, resource, sub_path)
 
 resource_action = detail_action = resource_route
 
