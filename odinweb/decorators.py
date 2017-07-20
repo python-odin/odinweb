@@ -57,28 +57,30 @@ class Operation(object):
     _operation_count = 0
 
     @classmethod
-    def decorate(cls, func=None, path_type=PathType.Collection, method=Method.GET, resource=None, sub_path=None):
-        # type: (Callable, PathType, Union(Method, Tuple(Union)), Type[Resource], Union[Union(str, PathNode), Tuple(Union(str, PathNode))]) -> Operation
+    def decorate(cls, func=None, path_type=PathType.Collection, methods=Method.GET, resource=None, sub_path=None,
+                 tags=None):
+        # type: (Callable, PathType, Union(Method, Tuple[Union]), Type[Resource], Union(Union(str, PathNode), Tuple(Union(str, PathNode))), Union(str, Tuple[str])) -> Operation
         """
         :param func: Function we are routing
-        :param sub_path: A sub path that can be used as a action.
         :param path_type: Type of path, list/detail or custom.
         :param methods: HTTP method(s) this function responses to.
-        :type methods: str | tuple(str) | list(str)
         :param resource: Specify the resource that this function encodes/decodes,
             default is the one specified on the ResourceAPI instance.
+        :param sub_path: A sub path that can be used as a action.
+        :param tags: Tags to be applied to operation
         """
-        def wrapper(f):
-            return cls(f, path_type, method, resource, sub_path)
-        return wrapper(func) if func else wrapper
+        def inner(f):
+            return cls(f, path_type, methods, resource, sub_path, tags)
+        return inner(func) if func else inner
 
-    def __init__(self, callback, path_type, method, resource, sub_path):
-        # type: (Callable, PathType, Union(Method, Tuple(Union)), Type[Resource], Union[Union(str, PathNode), Tuple(Union(str, PathNode))]) -> None
-        self.callback = callback
+    def __init__(self, callback, path_type, methods, resource, sub_path, tags):
+        # type: (Callable, PathType, Union(Method, Tuple[Union]), Type[Resource], Union(Union(str, PathNode), Tuple(Union(str, PathNode))), Union(str, Tuple[str])) -> Operation
+        self.base_callback = self.callback = callback
         self.path_type = path_type
-        self.methods = force_tuple(method)
+        self.methods = force_tuple(methods)
         self.resource = resource
         self.sub_path = force_tuple(sub_path)
+        self.tags = tags
 
         self._hash_id = Operation._operation_count
         Operation._operation_count += 1
@@ -91,6 +93,26 @@ class Operation(object):
     def __call__(self, *args, **kwargs):
         return self.callback(*args, **kwargs)
 
+    def dispatch(self, request, **path_args):
+        # Authorisation hook
+        if hasattr(self, 'handle_authorisation'):
+            self.handle_authorisation(request)
+
+        # Allow for a pre_dispatch hook, a response from pre_dispatch would indicate an override of kwargs
+        if hasattr(self, 'pre_dispatch'):
+            response = self.pre_dispatch(request, **path_args)
+            if response is not None:
+                path_args = response
+
+        # callbacks are obtained prior to binding hence methods are unbound and self needs to be supplied.
+        result = self.callback(self, request, **path_args)
+
+        # Allow for a post_dispatch hook, the response of which is returned
+        if hasattr(self, 'post_dispatch'):
+            return self.post_dispatch(request, result)
+        else:
+            return result
+
     @property
     def is_bound(self):
         # type: () -> bool
@@ -101,7 +123,7 @@ class Operation(object):
 
     @lazy_property
     def operation_id(self):
-        return self.callback.__name__
+        return self.base_callback.__name__
 
     @lazy_property
     def path(self):
@@ -116,7 +138,6 @@ class Operation(object):
 
     def bind_to_instance(self, instance):
         self.resource_api = instance
-
 
 collection = collection_action = action = route = Operation.decorate
 
