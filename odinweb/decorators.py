@@ -37,6 +37,9 @@ _route_count = 0
 # Definition of a route bound to a class method
 RouteDefinition = namedtuple("RouteDefinition", 'route_number path_type methods sub_path callback')
 
+Tags = Union[str, Tuple[str]]
+SubPath = Union[Union[str, PathNode], Tuple[Union[str, PathNode]]]
+
 
 class Operation(object):
     """
@@ -59,7 +62,7 @@ class Operation(object):
     @classmethod
     def decorate(cls, func=None, path_type=PathType.Collection, methods=Method.GET, resource=None, sub_path=None,
                  tags=None):
-        # type: (Callable, PathType, Union(Method, Tuple[Union]), Type[Resource], Union(Union(str, PathNode), Tuple(Union(str, PathNode))), Union(str, Tuple[str])) -> Operation
+        # type: (Callable, PathType, Union(Method, Tup[Method]), Type[Resource], SubPath, Tags) -> Operation
         """
         :param func: Function we are routing
         :param path_type: Type of path, list/detail or custom.
@@ -74,7 +77,7 @@ class Operation(object):
         return inner(func) if func else inner
 
     def __init__(self, callback, path_type, methods, resource, sub_path, tags):
-        # type: (Callable, PathType, Union(Method, Tuple[Union]), Type[Resource], Union(Union(str, PathNode), Tuple(Union(str, PathNode))), Union(str, Tuple[str])) -> Operation
+        # type: (Callable, PathType, Union(Method, Tuple[Method]), Type[Resource], SubPath, Tags) -> Operation
         self.base_callback = self.callback = callback
         self.path_type = path_type
         self.methods = force_tuple(methods)
@@ -85,7 +88,8 @@ class Operation(object):
         self._hash_id = Operation._operation_count
         Operation._operation_count += 1
 
-        self.resource_api = None
+        # If this operation is bound to a ResourceAPI
+        self.binding = None
 
     def __hash__(self):
         return self._hash_id
@@ -119,7 +123,7 @@ class Operation(object):
         """
         Operation is bound to a resource api
         """
-        return self.resource_api is not None
+        return bool(self.binding)
 
     @lazy_property
     def operation_id(self):

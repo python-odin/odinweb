@@ -85,219 +85,219 @@ class MockApiInterface(api.ApiInterfaceBase):
 #################################################
 # Tests
 
-class TestResourceApiMeta(object):
-    def test_empty_api(self, mocker):
-        mocker.patch('odinweb.decorators._route_count', 0)
+# class TestResourceApiMeta(object):
+#     def test_empty_api(self, mocker):
+#         mocker.patch('odinweb.decorators._route_count', 0)
+#
+#         class ExampleApi(api.ResourceApi):
+#             pass
+#
+#         assert ExampleApi._routes == []
+#
+#     def test_normal_api(self, mocker):
+#         mocker.patch('odinweb.decorators._route_count', 0)
+#
+#         class ExampleApi(api.ResourceApi):
+#             @api.collection
+#             def list_items(self, request):
+#                 pass
+#
+#             @api.detail
+#             def get_item(self, request, resource_id):
+#                 pass
+#
+#             @api.route(methods=('POST', 'PUT'))
+#             def create_item(self, request):
+#                 pass
+#
+#         assert ExampleApi._routes == [
+#             decorators.RouteDefinition(0, PathType.Collection, ('GET',), None, ExampleApi.__dict__['list_items']),
+#             decorators.RouteDefinition(1, PathType.Resource, ('GET',), None, ExampleApi.__dict__['get_item']),
+#             decorators.RouteDefinition(2, PathType.Collection, ('POST', 'PUT'), None, ExampleApi.__dict__['create_item']),
+#         ]
+#
+#     def test_sub_classed_api(self, mocker):
+#         mocker.patch('odinweb.decorators._route_count', 0)
+#
+#         class SuperApi(api.ResourceApi):
+#             @api.collection
+#             def list_items(self, request):
+#                 pass
+#
+#         class SubApi(SuperApi):
+#             @api.detail
+#             def get_item(self, request, resource_id):
+#                 pass
+#
+#             @api.route(methods=('POST', 'PUT'))
+#             def create_item(self, request):
+#                 pass
+#
+#         assert SubApi._routes == [
+#             decorators.RouteDefinition(0, PathType.Collection, ('GET',), None, SuperApi.__dict__['list_items']),
+#             decorators.RouteDefinition(1, PathType.Resource, ('GET',), None, SubApi.__dict__['get_item']),
+#             decorators.RouteDefinition(2, PathType.Collection, ('POST', 'PUT'), None, SubApi.__dict__['create_item']),
+#         ]
 
-        class ExampleApi(api.ResourceApi):
-            pass
 
-        assert ExampleApi._routes == []
-
-    def test_normal_api(self, mocker):
-        mocker.patch('odinweb.decorators._route_count', 0)
-
-        class ExampleApi(api.ResourceApi):
-            @api.collection
-            def list_items(self, request):
-                pass
-
-            @api.detail
-            def get_item(self, request, resource_id):
-                pass
-
-            @api.route(methods=('POST', 'PUT'))
-            def create_item(self, request):
-                pass
-
-        assert ExampleApi._routes == [
-            decorators.RouteDefinition(0, PathType.Collection, ('GET',), None, ExampleApi.__dict__['list_items']),
-            decorators.RouteDefinition(1, PathType.Resource, ('GET',), None, ExampleApi.__dict__['get_item']),
-            decorators.RouteDefinition(2, PathType.Collection, ('POST', 'PUT'), None, ExampleApi.__dict__['create_item']),
-        ]
-
-    def test_sub_classed_api(self, mocker):
-        mocker.patch('odinweb.decorators._route_count', 0)
-
-        class SuperApi(api.ResourceApi):
-            @api.collection
-            def list_items(self, request):
-                pass
-
-        class SubApi(SuperApi):
-            @api.detail
-            def get_item(self, request, resource_id):
-                pass
-
-            @api.route(methods=('POST', 'PUT'))
-            def create_item(self, request):
-                pass
-
-        assert SubApi._routes == [
-            decorators.RouteDefinition(0, PathType.Collection, ('GET',), None, SuperApi.__dict__['list_items']),
-            decorators.RouteDefinition(1, PathType.Resource, ('GET',), None, SubApi.__dict__['get_item']),
-            decorators.RouteDefinition(2, PathType.Collection, ('POST', 'PUT'), None, SubApi.__dict__['create_item']),
-        ]
-
-
-class TestResourceApi(object):
-    def test_api_name__default(self):
-        target = UserApi()
-
-        assert target.api_name == 'user'
-
-    def test_api_name__custom(self):
-        class Example(api.ResourceApi):
-            resource = User
-            api_name = 'users'
-
-        target = Example()
-
-        assert target.api_name == 'users'
-
-    def test_debug_enabled__no_parent(self):
-        target = UserApi()
-
-        assert not target.debug_enabled
-
-    def test_debug_enabled__with_parent(self):
-        parent = mock.Mock()
-        parent.debug_enabled = True
-
-        target = UserApi()
-        target.parent = parent
-
-        assert target.debug_enabled
-
-    def test_api_routes(self):
-        target = UserApi()
-        target._wrap_callback = lambda callback, methods: callback
-
-        actual = flatten_routes(target.api_routes())
-
-        assert actual == [
-            api.ApiRoute(['user'], ('GET',), UserApi.__dict__['list_items']),
-            api.ApiRoute(['user', '<resource_id>'], ('GET',), UserApi.__dict__['get_item']),
-            api.ApiRoute(['user', '<resource_id>', 'start'], ('POST',), UserApi.__dict__['start_item']),
-        ]
-
-    @pytest.mark.parametrize('r, status, message', (
-        (MockRequest(headers={'content-type': 'application/xml', 'accepts': 'application/json'}),
-         422, 'Unprocessable Entity'),
-        (MockRequest(headers={'content-type': 'application/json', 'accepts': 'application/xml'}),
-         406, 'URI not available in preferred format'),
-        (MockRequest('POST'), 405, 'Specified method is invalid for this resource'),
-    ))
-    def test_wrap_callback__invalid_headers(self, r, status, message):
-        def callback(s, request):
-            pass
-
-        target = UserApi()
-        wrapper = target._wrap_callback(callback, ['GET'])
-        actual = wrapper(r)
-
-        assert actual.status == status
-        assert actual.body == message
-
-    @pytest.mark.parametrize('error,status', (
-        (api.ImmediateHttpResponse(None, 330, {}), 330),
-        (ValidationError("Error"), 400),
-        (ValidationError({}), 400),
-        (NotImplementedError, 501),
-        (ValueError, 500)
-    ))
-    def test_wrap_callback__exceptions(self, error, status):
-        def callback(s, request):
-            raise error
-
-        target = UserApi()
-        wrapper = target._wrap_callback(callback, ['GET'])
-        actual = wrapper(MockRequest())
-
-        assert actual.status == status
-
-    def test_dispatch__with_authorisation(self):
-        class AuthorisedUserApi(UserApi):
-            def handle_authorisation(self, request):
-                self.calls.append('handle_authorisation')
-
-        target = AuthorisedUserApi()
-        result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
-
-        assert 'handle_authorisation' in target.calls
-        assert result == {"a": "b"}
-
-    def test_dispatch__with_pre_dispatch(self):
-        class AuthorisedUserApi(UserApi):
-            def pre_dispatch(self, request, **path_args):
-                self.calls.append('pre_dispatch')
-
-        target = AuthorisedUserApi()
-        result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
-
-        assert 'pre_dispatch' in target.calls
-        assert 'mock_callback' in target.calls
-        assert result == {"a": "b"}
-
-    def test_dispatch__with_pre_dispatch_modify_path_args(self):
-        class AuthorisedUserApi(UserApi):
-            def pre_dispatch(self, request, **path_args):
-                self.calls.append('pre_dispatch')
-                return {}
-
-        target = AuthorisedUserApi()
-        result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
-
-        assert 'pre_dispatch' in target.calls
-        assert 'mock_callback' in target.calls
-        assert result == {}
-
-    def test_dispatch__with_post_dispatch(self):
-        class AuthorisedUserApi(UserApi):
-            def post_dispatch(self, request, result):
-                self.calls.append('post_dispatch')
-                result['c'] = 'd'
-                return result
-
-        target = AuthorisedUserApi()
-        result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
-
-        assert 'post_dispatch' in target.calls
-        assert 'mock_callback' in target.calls
-        assert result == {"a": "b", "c": "d"}
-
-    @pytest.mark.parametrize('body, error_code', (
-        (b'\xFF', 40099),  # Invalid UTF-8
-        (None, 40096,),
-        ('stuff', 40096),
-        ('{"a":"b",}', 40096),
-        ('[{"a":"b"}]', 40097),
-    ))
-    def test_resource_from_body__codec_exceptions(self, body, error_code):
-        target = UserApi()
-        request = MockRequest(body=body)
-
-        with pytest.raises(api.HttpError) as exc_info:
-            target.get_resource(request)
-
-        assert exc_info.value.status == 400
-        assert exc_info.value.resource.code == error_code
-
-    @pytest.mark.parametrize('value, body, status', (
-        (None, None, 204),
-        ('abc', '"abc"', 200),
-        (123, '123', 200),
-        ([], None, 204),
-        ([1, 2, 3], '[1, 2, 3]', 200),
-        (set("123"), 'Error encoding response.', 500),
-    ))
-    def test_create_response(self, value, body, status):
-        target = UserApi()
-        request = MockRequest()
-
-        actual = target.create_response(request, value)
-        assert actual.body == body
-        assert actual.status == status
+# class TestResourceApi(object):
+#     def test_api_name__default(self):
+#         target = UserApi()
+#
+#         assert target.api_name == 'user'
+#
+#     def test_api_name__custom(self):
+#         class Example(api.ResourceApi):
+#             resource = User
+#             api_name = 'users'
+#
+#         target = Example()
+#
+#         assert target.api_name == 'users'
+#
+#     def test_debug_enabled__no_parent(self):
+#         target = UserApi()
+#
+#         assert not target.debug_enabled
+#
+#     def test_debug_enabled__with_parent(self):
+#         parent = mock.Mock()
+#         parent.debug_enabled = True
+#
+#         target = UserApi()
+#         target.parent = parent
+#
+#         assert target.debug_enabled
+#
+#     def test_api_routes(self):
+#         target = UserApi()
+#         target._wrap_callback = lambda callback, methods: callback
+#
+#         actual = flatten_routes(target.api_routes())
+#
+#         assert actual == [
+#             api.ApiRoute(['user'], ('GET',), UserApi.__dict__['list_items']),
+#             api.ApiRoute(['user', '<resource_id>'], ('GET',), UserApi.__dict__['get_item']),
+#             api.ApiRoute(['user', '<resource_id>', 'start'], ('POST',), UserApi.__dict__['start_item']),
+#         ]
+#
+#     @pytest.mark.parametrize('r, status, message', (
+#         (MockRequest(headers={'content-type': 'application/xml', 'accepts': 'application/json'}),
+#          422, 'Unprocessable Entity'),
+#         (MockRequest(headers={'content-type': 'application/json', 'accepts': 'application/xml'}),
+#          406, 'URI not available in preferred format'),
+#         (MockRequest('POST'), 405, 'Specified method is invalid for this resource'),
+#     ))
+#     def test_wrap_callback__invalid_headers(self, r, status, message):
+#         def callback(s, request):
+#             pass
+#
+#         target = UserApi()
+#         wrapper = target._wrap_callback(callback, ['GET'])
+#         actual = wrapper(r)
+#
+#         assert actual.status == status
+#         assert actual.body == message
+#
+#     @pytest.mark.parametrize('error,status', (
+#         (api.ImmediateHttpResponse(None, 330, {}), 330),
+#         (ValidationError("Error"), 400),
+#         (ValidationError({}), 400),
+#         (NotImplementedError, 501),
+#         (ValueError, 500)
+#     ))
+#     def test_wrap_callback__exceptions(self, error, status):
+#         def callback(s, request):
+#             raise error
+#
+#         target = UserApi()
+#         wrapper = target._wrap_callback(callback, ['GET'])
+#         actual = wrapper(MockRequest())
+#
+#         assert actual.status == status
+#
+#     def test_dispatch__with_authorisation(self):
+#         class AuthorisedUserApi(UserApi):
+#             def handle_authorisation(self, request):
+#                 self.calls.append('handle_authorisation')
+#
+#         target = AuthorisedUserApi()
+#         result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
+#
+#         assert 'handle_authorisation' in target.calls
+#         assert result == {"a": "b"}
+#
+#     def test_dispatch__with_pre_dispatch(self):
+#         class AuthorisedUserApi(UserApi):
+#             def pre_dispatch(self, request, **path_args):
+#                 self.calls.append('pre_dispatch')
+#
+#         target = AuthorisedUserApi()
+#         result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
+#
+#         assert 'pre_dispatch' in target.calls
+#         assert 'mock_callback' in target.calls
+#         assert result == {"a": "b"}
+#
+#     def test_dispatch__with_pre_dispatch_modify_path_args(self):
+#         class AuthorisedUserApi(UserApi):
+#             def pre_dispatch(self, request, **path_args):
+#                 self.calls.append('pre_dispatch')
+#                 return {}
+#
+#         target = AuthorisedUserApi()
+#         result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
+#
+#         assert 'pre_dispatch' in target.calls
+#         assert 'mock_callback' in target.calls
+#         assert result == {}
+#
+#     def test_dispatch__with_post_dispatch(self):
+#         class AuthorisedUserApi(UserApi):
+#             def post_dispatch(self, request, result):
+#                 self.calls.append('post_dispatch')
+#                 result['c'] = 'd'
+#                 return result
+#
+#         target = AuthorisedUserApi()
+#         result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
+#
+#         assert 'post_dispatch' in target.calls
+#         assert 'mock_callback' in target.calls
+#         assert result == {"a": "b", "c": "d"}
+#
+#     @pytest.mark.parametrize('body, error_code', (
+#         (b'\xFF', 40099),  # Invalid UTF-8
+#         (None, 40096,),
+#         ('stuff', 40096),
+#         ('{"a":"b",}', 40096),
+#         ('[{"a":"b"}]', 40097),
+#     ))
+#     def test_resource_from_body__codec_exceptions(self, body, error_code):
+#         target = UserApi()
+#         request = MockRequest(body=body)
+#
+#         with pytest.raises(api.HttpError) as exc_info:
+#             target.get_resource(request)
+#
+#         assert exc_info.value.status == 400
+#         assert exc_info.value.resource.code == error_code
+#
+#     @pytest.mark.parametrize('value, body, status', (
+#         (None, None, 204),
+#         ('abc', '"abc"', 200),
+#         (123, '123', 200),
+#         ([], None, 204),
+#         ([1, 2, 3], '[1, 2, 3]', 200),
+#         (set("123"), 'Error encoding response.', 500),
+#     ))
+#     def test_create_response(self, value, body, status):
+#         target = UserApi()
+#         request = MockRequest()
+#
+#         actual = target.create_response(request, value)
+#         assert actual.body == body
+#         assert actual.status == status
 
 
 class TestApiContainer(object):
@@ -425,29 +425,29 @@ class TestApiInterfaceBase(object):
             target.parse_node(None)
 
 
-def test_nested_api():
-    user_api = UserApi()
-    user_api._wrap_callback = lambda callback, methods: callback
-
-    target = MockApiInterface(
-        api.ApiVersion(
-            user_api
-        ),
-        api.ApiVersion(
-            api.ApiCollection(
-                MockResourceApi(),
-                name='collection'
-            ),
-            version=2
-        ),
-        name='!api'
-    )
-
-    actual = list(target.build_routes())
-    assert actual == [
-        api.ApiRoute('/!api/v1/user', ('GET',), UserApi.__dict__['list_items']),
-        api.ApiRoute('/!api/v1/user/<resource_id>', ('GET',), UserApi.__dict__['get_item']),
-        api.ApiRoute('/!api/v1/user/<resource_id>/start', ('POST',), UserApi.__dict__['start_item']),
-        api.ApiRoute('/!api/v2/collection/a/b', ('GET',), mock_callback),
-        api.ApiRoute('/!api/v2/collection/d/e', ('POST', 'PATCH'), mock_callback),
-    ]
+# def test_nested_api():
+#     user_api = UserApi()
+#     user_api._wrap_callback = lambda callback, methods: callback
+#
+#     target = MockApiInterface(
+#         api.ApiVersion(
+#             user_api
+#         ),
+#         api.ApiVersion(
+#             api.ApiCollection(
+#                 MockResourceApi(),
+#                 name='collection'
+#             ),
+#             version=2
+#         ),
+#         name='!api'
+#     )
+#
+#     actual = list(target.build_routes())
+#     assert actual == [
+#         api.ApiRoute('/!api/v1/user', ('GET',), UserApi.__dict__['list_items']),
+#         api.ApiRoute('/!api/v1/user/<resource_id>', ('GET',), UserApi.__dict__['get_item']),
+#         api.ApiRoute('/!api/v1/user/<resource_id>/start', ('POST',), UserApi.__dict__['start_item']),
+#         api.ApiRoute('/!api/v2/collection/a/b', ('GET',), mock_callback),
+#         api.ApiRoute('/!api/v2/collection/d/e', ('POST', 'PATCH'), mock_callback),
+#     ]

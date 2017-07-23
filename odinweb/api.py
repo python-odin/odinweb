@@ -9,9 +9,12 @@ import logging
 
 from functools import wraps
 from itertools import chain
+from typing import Callable, Union, Tuple
+
+from odin import Resource
 from odin.codecs import json_codec
 from odin.exceptions import ValidationError, CodecDecodeError
-from odin.utils import getmeta
+from odin.utils import getmeta, lazy_property
 
 from . import _compat
 from . import content_type_resolvers
@@ -26,9 +29,9 @@ from .decorators import *  # noqa
 
 logger = logging.getLogger(__name__)
 
-CODECS = {
-    json_codec.CONTENT_TYPE: json_codec,
-}
+
+CODECS = {json_codec.CONTENT_TYPE: json_codec}
+
 # Attempt to load other codecs that have dependencies
 try:
     from odin.codecs import msgpack_codec
@@ -51,6 +54,109 @@ def resolve_content_type(type_resolvers, request):
         content_type = parse_content_type(resolver(request))
         if content_type:
             return content_type
+
+
+class Operation(object):
+    """
+    Decorator for defining an API operation. Usually one of the helpers (listing, detail, update, delete) would be
+    used in place of this route decorator.
+
+    Usage::
+
+        class ItemApi(ResourceApi):
+            resource = Item
+
+            @route(path=PathType.Collection, methods=Method.GET)
+            def list_items(self, request):
+                ...
+                return items
+
+    """
+    _operation_count = 0
+
+    @classmethod
+    def decorate(cls, func=None, path_type=PathType.Collection, methods=Method.GET, resource=None, sub_path=None,
+                 tags=None):
+        # type: (Callable, PathType, Union(Method, Tuple[Method]), Type[Resource], SubPath, Tags) -> Operation
+        """
+        :param func: Function we are routing
+        :param path_type: Type of path, list/detail or custom.
+        :param methods: HTTP method(s) this function responses to.
+        :param resource: Specify the resource that this function encodes/decodes,
+            default is the one specified on the ResourceAPI instance.
+        :param sub_path: A sub path that can be used as a action.
+        :param tags: Tags to be applied to operation
+        """
+        def inner(f):
+            return cls(f, path_type, methods, resource, sub_path, tags)
+        return inner(func) if func else inner
+
+    def __init__(self, callback, path_type, methods, resource, sub_path, tags):
+        # type: (Callable, PathType, Union(Method, Tuple[Method]), Type[Resource], SubPath, Tags) -> Operation
+        self.base_callback = self.callback = callback
+        self.path_type = path_type
+        self.methods = force_tuple(methods)
+        self.resource = resource
+        self.sub_path = force_tuple(sub_path)
+        self.tags = tags
+
+        self._hash_id = Operation._operation_count
+        Operation._operation_count += 1
+
+        # If this operation is bound to a ResourceAPI
+        self.binding = None
+
+    def __hash__(self):
+        return self._hash_id
+
+    def __call__(self, *args, **kwargs):
+        return self.callback(*args, **kwargs)
+
+    def dispatch(self, request, **path_args):
+        # Authorisation hook
+        if hasattr(self, 'handle_authorisation'):
+            self.handle_authorisation(request)
+
+        # Allow for a pre_dispatch hook, a response from pre_dispatch would indicate an override of kwargs
+        if hasattr(self, 'pre_dispatch'):
+            response = self.pre_dispatch(request, **path_args)
+            if response is not None:
+                path_args = response
+
+        # callbacks are obtained prior to binding hence methods are unbound and self needs to be supplied.
+        result = self.callback(self, request, **path_args)
+
+        # Allow for a post_dispatch hook, the response of which is returned
+        if hasattr(self, 'post_dispatch'):
+            return self.post_dispatch(request, result)
+        else:
+            return result
+
+    @property
+    def is_bound(self):
+        # type: () -> bool
+        """
+        Operation is bound to a resource api
+        """
+        return bool(self.binding)
+
+    @lazy_property
+    def operation_id(self):
+        return self.base_callback.__name__
+
+    @lazy_property
+    def path(self):
+        resource_api = self.resource_api
+
+        path = list(resource_api.path_prefix) + [resource_api.api_name]
+
+        if self.path_type == PathType.Resource:
+            path.append(PathNode(resource_api.resource_id_name, resource_api.resource_id_type, None))
+
+        return path + list(self.sub_path or [])
+
+    def bind_to_instance(self, instance):
+        self.resource_api = instance
 
 
 class ResourceApiMeta(type):
@@ -122,36 +228,6 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
     Prefix to prepend to any generated path.
     """
 
-    request_type_resolvers = [
-        content_type_resolvers.content_type_header(),
-        content_type_resolvers.accepts_header(),
-        content_type_resolvers.specific_default(json_codec.CONTENT_TYPE),
-    ]
-    """
-    Collection of resolvers used to identify the content type of the request.
-    """
-
-    response_type_resolvers = [
-        content_type_resolvers.accepts_header(),
-        content_type_resolvers.content_type_header(),
-        content_type_resolvers.specific_default(json_codec.CONTENT_TYPE),
-    ]
-    """
-    Collection of resolvers used to identify the content type of the response.
-    """
-
-    registered_codecs = CODECS
-    """
-    Codecs that are supported by this API.
-    """
-
-    remap_codecs = {
-        'text/plain': 'application/json'
-    }
-    """
-    Remap certain codecs commonly mistakenly used.
-    """
-
     parent = None
 
     def __init__(self):
@@ -191,21 +267,6 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
     def _wrap_callback(self, callback, methods):
         @wraps(callback)
         def wrapper(request, **path_args):
-            # Determine the request and response types. Ensure API supports the requested types
-            request_type = resolve_content_type(self.request_type_resolvers, request)
-            request_type = self.remap_codecs.get(request_type, request_type)
-            try:
-                request.request_codec = self.registered_codecs[request_type]
-            except KeyError:
-                return HttpResponse.from_status(HTTPStatus.UNPROCESSABLE_ENTITY)
-
-            response_type = resolve_content_type(self.response_type_resolvers, request)
-            response_type = self.remap_codecs.get(response_type, response_type)
-            try:
-                request.response_codec = self.registered_codecs[response_type]
-            except KeyError:
-                return HttpResponse.from_status(HTTPStatus.NOT_ACCEPTABLE)
-
             # Check if method is in our allowed method list
             if request.method not in methods:
                 return HttpResponse.from_status(HTTPStatus.METHOD_NOT_ALLOWED, {'Allow', ','.join(methods)})
@@ -450,12 +511,58 @@ class ApiInterfaceBase(ApiContainer):
     being used.
     
     """
+    registered_codecs = CODECS
+    """
+    Codecs that are supported by this API.
+    """
+
+    request_type_resolvers = [
+        content_type_resolvers.content_type_header(),
+        content_type_resolvers.accepts_header(),
+        content_type_resolvers.specific_default(json_codec.CONTENT_TYPE),
+    ]
+    """
+    Collection of resolvers used to identify the content type of the request.
+    """
+
+    response_type_resolvers = [
+        content_type_resolvers.accepts_header(),
+        content_type_resolvers.content_type_header(),
+        content_type_resolvers.specific_default(json_codec.CONTENT_TYPE),
+    ]
+    """
+    Collection of resolvers used to identify the content type of the response.
+    """
+
+    remap_codecs = {
+        'text/plain': 'application/json'
+    }
+    """
+    Remap certain codecs commonly mistakenly used.
+    """
+
     def __init__(self, *endpoints, **options):
         options.setdefault('name', 'api')
         url_prefix = options.pop('url_prefix', '/')
         self.debug_enabled = options.pop('debug_enabled', False)
         super(ApiInterfaceBase, self).__init__(*endpoints, **options)
         self.path_prefix.insert(0, url_prefix.rstrip('/'))
+
+    def dispatch(self, op_callback, request, **kwargs):
+        # Determine the request and response types. Ensure API supports the requested types
+        request_type = resolve_content_type(self.request_type_resolvers, request)
+        request_type = self.remap_codecs.get(request_type, request_type)
+        try:
+            request.request_codec = self.registered_codecs[request_type]
+        except KeyError:
+            return HttpResponse.from_status(HTTPStatus.UNPROCESSABLE_ENTITY)
+
+        response_type = resolve_content_type(self.response_type_resolvers, request)
+        response_type = self.remap_codecs.get(response_type, response_type)
+        try:
+            request.response_codec = self.registered_codecs[response_type]
+        except KeyError:
+            return HttpResponse.from_status(HTTPStatus.NOT_ACCEPTABLE)
 
     def build_routes(self):
         parse_node = self.parse_node
