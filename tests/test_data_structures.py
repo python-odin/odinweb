@@ -23,6 +23,7 @@ class TestUrlPath(object):
 
     @pytest.mark.parametrize('path, expected', (
         ('', ()),
+        ('/', ('',)),
         ('a', ('a',)),
         ('a/b', ('a', 'b')),
         ('/a/b', ('', 'a', 'b')),
