@@ -7,7 +7,6 @@ from __future__ import absolute_import, unicode_literals
 
 import logging
 
-from functools import wraps
 from typing import Callable, Union, Tuple, List, Any, Optional
 
 from odin import Resource
@@ -18,14 +17,14 @@ from odinweb.data_structures import UrlPath
 
 from . import _compat
 from . import content_type_resolvers
-from .data_structures import ApiRoute, PathNode, HttpResponse
+from .data_structures import ApiRoute, HttpResponse
 from .exceptions import ImmediateHttpResponse, HttpError
 from .resources import Error
 from .utils import parse_content_type
 
 # Import all to simplify end user API.
 from .constants import *  # noqa
-from .decorators import *  # noqa
+# from .decorators import *  # noqa
 
 logger = logging.getLogger(__name__)
 
@@ -82,11 +81,10 @@ class Operation(object):
         # type: (Callable, UrlPath, Union(Method, Tuple[Method]), Type[Resource], Tags) -> Operation
         """
         :param func: Function we are routing
-        :param path_type: Type of path, list/detail or custom.
+        :param url_path: A sub path that can be used as a action.
         :param methods: HTTP method(s) this function responses to.
         :param resource: Specify the resource that this function encodes/decodes,
             default is the one specified on the ResourceAPI instance.
-        :param sub_path: A sub path that can be used as a action.
         :param tags: Tags to be applied to operation
         """
         def inner(f):
@@ -113,13 +111,19 @@ class Operation(object):
     def __call__(self, *args, **kwargs):
         return self.callback(*args, **kwargs)
 
-    def dispatch(self, request, **path_args):
-        # Authorisation hook
-        if hasattr(self, 'handle_authorisation'):
-            self.handle_authorisation(request)
+    def bind_to_instance(self, instance):
+        self.binding = instance
 
+    def operations(self, path_prefix=None):
+        # type: (Optional[Union[str, UrlPath]]) -> List[Operation]
+        """
+        Return all operations stored in containers.
+        """
+        return [self]
+
+    def dispatch(self, request, **path_args):
         # Allow for a pre_dispatch hook, a response from pre_dispatch would indicate an override of kwargs
-        if hasattr(self, 'pre_dispatch'):
+        if self.binding and hasattr(self, 'pre_dispatch'):
             response = self.pre_dispatch(request, **path_args)
             if response is not None:
                 path_args = response
@@ -144,20 +148,6 @@ class Operation(object):
     @lazy_property
     def operation_id(self):
         return self.base_callback.__name__
-
-    @lazy_property
-    def path(self):
-        resource_api = self.resource_api
-
-        path = list(resource_api.path_prefix) + [resource_api.api_name]
-
-        if self.path_type == PathType.Resource:
-            path.append(PathNode(resource_api.resource_id_name, resource_api.resource_id_type, None))
-
-        return path + list(self.sub_path or [])
-
-    def bind_to_instance(self, instance):
-        self.resource_api = instance
 
 
 class ResourceApiMeta(type):
@@ -249,74 +239,6 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
             return self.parent.debug_enabled
         return False
 
-    def api_routes(self):
-        """
-        Return implementation independent routes 
-        """
-        if self._api_routes is None:
-            operations = []
-
-            for operation in self._operations:
-                methods = tuple(m.value for m in operation.methods)
-                operation.callback = self._wrap_callback(operation.callback, methods)
-                operations.append(ApiRoute(operation.path, methods, operation))
-
-            self._api_routes = operations
-
-        return self._api_routes
-
-    def _wrap_callback(self, callback, methods):
-        @wraps(callback)
-        def wrapper(request, **path_args):
-            # Check if method is in our allowed method list
-            if request.method not in methods:
-                return HttpResponse.from_status(HTTPStatus.METHOD_NOT_ALLOWED, {'Allow', ','.join(methods)})
-
-            # Response types
-            status = headers = None
-
-            try:
-                resource = self.dispatch(callback, request, **path_args)
-
-            except ImmediateHttpResponse as e:
-                # An exception used to return a response immediately, skipping any
-                # further processing.
-                resource, status, headers = e.resource, e.status, e.headers
-
-            except ValidationError as e:
-                # A validation error was raised by a resource.
-                if hasattr(e, 'message_dict'):
-                    resource = Error.from_status(HTTPStatus.BAD_REQUEST, 0, "Failed validation",
-                                                 meta=e.message_dict)
-                else:
-                    resource = Error.from_status(HTTPStatus.BAD_REQUEST, 0, str(e))
-                status = resource.status
-
-            except NotImplementedError:
-                resource = Error.from_status(HTTPStatus.NOT_IMPLEMENTED, 0,
-                                             "The method has not been implemented")
-                status = resource.status
-
-            except Exception as e:
-                if self.debug_enabled:
-                    # If debug is enabled then fallback to the frameworks default
-                    # error processing, this often provides convenience features
-                    # to aid in the debugging process.
-                    raise
-                resource = self.handle_500(request, e)
-                status = resource.status
-
-            if isinstance(status, HTTPStatus):
-                status = status.value
-
-            # Return a HttpResponse and just send it!
-            if isinstance(resource, HttpResponse):
-                return resource
-
-            return self.create_response(request, resource, status, headers)
-
-        return wrapper
-
     def dispatch(self, callback, request, **path_args):
         # Authorisation hook
         if hasattr(self, 'handle_authorisation'):
@@ -336,17 +258,6 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
             return self.post_dispatch(request, result)
         else:
             return result
-
-    def handle_500(self, request, exception):
-        """
-        Handle an *un-handled* exception.
-        """
-        logger.exception('Internal Server Error: %s', exception, extra={
-            'status_code': 500,
-            'request': request
-        })
-        return Error.from_status(HTTPStatus.INTERNAL_SERVER_ERROR, 0,
-                                 "An unhandled error has been caught.")
 
     def decode_body(self, request):
         """
@@ -384,36 +295,6 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
 
         return resource
 
-    def create_response(self, request, body=None, status=None, headers=None):
-        """
-        Generate a HttpResponse.
-        
-        :param request: Request object 
-        :param body: Body of the response
-        :param status: HTTP status code
-        :param headers: Any headers.
-
-        """
-        if not body:
-            return HttpResponse(None, status or HTTPStatus.NO_CONTENT, headers)
-
-        try:
-            body = request.response_codec.dumps(body)
-        except Exception as ex:
-            if self.debug_enabled:
-                # If debug is enabled then fallback to the frameworks default
-                # error processing, this often provides convenience features
-                # to aid in the debugging process.
-                raise
-            # Use a high level exception handler as the JSON codec can
-            # return a large array of errors.
-            self.handle_500(request, ex)
-            return HttpResponse("Error encoding response.", HTTPStatus.INTERNAL_SERVER_ERROR)
-        else:
-            response = HttpResponse(body, status or HTTPStatus.OK, headers)
-            response.set_content_type(request.response_codec.CONTENT_TYPE)
-            return response
-
 
 class ApiContainer(object):
     """
@@ -443,31 +324,18 @@ class ApiContainer(object):
         if options:
             raise TypeError("Got an unexpected keyword argument(s) {}", options.keys())
 
-    def operations(self, path_prefix=None):
+    def operations(self, path_base=None):
         # type: (Optional[Union[str, UrlPath]]) -> List[Operation]
         """
         Return all operations stored in containers.
         """
-        if path_prefix is None:
-            path_prefix = self.path_prefix
-        else:
-            path_prefix = UrlPath.from_object(path_prefix)
+        if path_base:
+            path_base += self.path_prefix
 
         for container in self.containers:
             container.parent = self
-            for operation in container.operations():
-                # TODO: Decide on a a design for building the full URL path
+            for operation in container.operations(path_base):
                 yield operation
-
-    def referenced_resources(self):
-        # type: () -> set
-        """
-        Return a set of resources referenced by the API.
-        """
-        resources = set()
-        for operation in self.operations():
-            resources.update(operation.resources)
-        return resources
 
 
 class ApiCollection(ApiContainer):
@@ -544,7 +412,21 @@ class ApiInterfaceBase(ApiContainer):
         if not self.path_prefix.is_absolute:
             raise ValueError("Path prefix must be an absolute path (eg start with a '/')")
 
-    def dispatch(self, op_callback, request, **kwargs):
+    def handle_500(self, request, exception):
+        """
+        Handle an *un-handled* exception.
+        """
+        logger.exception('Internal Server Error: %s', exception, extra={
+            'status_code': 500,
+            'request': request
+        })
+        return Error.from_status(HTTPStatus.INTERNAL_SERVER_ERROR, 0,
+                                 "An unhandled error has been caught.")
+
+    def dispatch(self, operation, request, **path_args):
+        """
+        Dispatch incoming request to operation.
+        """
         # Determine the request and response types. Ensure API supports the requested types
         request_type = resolve_content_type(self.request_type_resolvers, request)
         request_type = self.remap_codecs.get(request_type, request_type)
@@ -560,12 +442,79 @@ class ApiInterfaceBase(ApiContainer):
         except KeyError:
             return HttpResponse.from_status(HTTPStatus.NOT_ACCEPTABLE)
 
-    def build_routes(self):
-        parse_node = self.parse_node
+        # Check if method is in our allowed method list
+        # if request.method not in methods:
+        #     return HttpResponse.from_status(HTTPStatus.METHOD_NOT_ALLOWED, {'Allow', ','.join(methods)})
 
-        for api_route in self.api_routes():
-            path = '/'.join(parse_node(p) for p in api_route.path)
-            yield ApiRoute(path, api_route.methods, api_route.operation)
+        # Response types
+        status = headers = None
 
-    def parse_node(self, node):
-        raise NotImplementedError()
+        try:
+            resource = operation(request, **path_args)
+
+        except ImmediateHttpResponse as e:
+            # An exception used to return a response immediately, skipping any
+            # further processing.
+            resource, status, headers = e.resource, e.status, e.headers
+
+        except ValidationError as e:
+            # A validation error was raised by a resource.
+            if hasattr(e, 'message_dict'):
+                resource = Error.from_status(HTTPStatus.BAD_REQUEST, 0, "Failed validation",
+                                             meta=e.message_dict)
+            else:
+                resource = Error.from_status(HTTPStatus.BAD_REQUEST, 0, str(e))
+            status = resource.status
+
+        except NotImplementedError:
+            resource = Error.from_status(HTTPStatus.NOT_IMPLEMENTED, 0,
+                                         "The method has not been implemented")
+            status = resource.status
+
+        except Exception as e:
+            if self.debug_enabled:
+                # If debug is enabled then fallback to the frameworks default
+                # error processing, this often provides convenience features
+                # to aid in the debugging process.
+                raise
+            resource = self.handle_500(request, e)
+            status = resource.status
+
+        if isinstance(status, HTTPStatus):
+            status = status.value
+
+        # Return a HttpResponse and just send it!
+        if isinstance(resource, HttpResponse):
+            return resource
+
+        return self.create_response(request, resource, status, headers)
+
+    def create_response(self, request, body=None, status=None, headers=None):
+        """
+        Generate a HttpResponse.
+
+        :param request: Request object 
+        :param body: Body of the response
+        :param status: HTTP status code
+        :param headers: Any headers.
+
+        """
+        if body is None:
+            return HttpResponse(None, status or HTTPStatus.NO_CONTENT, headers)
+
+        try:
+            body = request.response_codec.dumps(body)
+        except Exception as ex:
+            if self.debug_enabled:
+                # If debug is enabled then fallback to the frameworks default
+                # error processing, this often provides convenience features
+                # to aid in the debugging process.
+                raise
+            # Use a high level exception handler as the JSON codec can
+            # return a large array of errors.
+            self.handle_500(request, ex)
+            return HttpResponse("Error encoding response.", HTTPStatus.INTERNAL_SERVER_ERROR)
+        else:
+            response = HttpResponse(body, status or HTTPStatus.OK, headers)
+            response.set_content_type(request.response_codec.CONTENT_TYPE)
+            return response

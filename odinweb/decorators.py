@@ -11,6 +11,8 @@ from typing import Callable, Union, Tuple, Type
 from collections import namedtuple
 from functools import wraps
 
+from odinweb.api import Operation
+
 from odin import Resource
 from odin.utils import force_tuple, lazy_property
 
@@ -39,109 +41,6 @@ RouteDefinition = namedtuple("RouteDefinition", 'route_number path_type methods 
 
 Tags = Union[str, Tuple[str]]
 SubPath = Union[Union[str, PathNode], Tuple[Union[str, PathNode]]]
-
-
-class Operation(object):
-    """
-    Decorator for defining an API operation. Usually one of the helpers (listing, detail, update, delete) would be
-    used in place of this route decorator.
-
-    Usage::
-
-        class ItemApi(ResourceApi):
-            resource = Item
-
-            @route(path=PathType.Collection, methods=Method.GET)
-            def list_items(self, request):
-                ...
-                return items
-
-    """
-    _operation_count = 0
-
-    @classmethod
-    def decorate(cls, func=None, path_type=PathType.Collection, methods=Method.GET, resource=None, sub_path=None,
-                 tags=None):
-        # type: (Callable, PathType, Union(Method, Tup[Method]), Type[Resource], SubPath, Tags) -> Operation
-        """
-        :param func: Function we are routing
-        :param path_type: Type of path, list/detail or custom.
-        :param methods: HTTP method(s) this function responses to.
-        :param resource: Specify the resource that this function encodes/decodes,
-            default is the one specified on the ResourceAPI instance.
-        :param sub_path: A sub path that can be used as a action.
-        :param tags: Tags to be applied to operation
-        """
-        def inner(f):
-            return cls(f, path_type, methods, resource, sub_path, tags)
-        return inner(func) if func else inner
-
-    def __init__(self, callback, path_type, methods, resource, sub_path, tags):
-        # type: (Callable, PathType, Union(Method, Tuple[Method]), Type[Resource], SubPath, Tags) -> Operation
-        self.base_callback = self.callback = callback
-        self.path_type = path_type
-        self.methods = force_tuple(methods)
-        self.resource = resource
-        self.sub_path = force_tuple(sub_path)
-        self.tags = tags
-
-        self._hash_id = Operation._operation_count
-        Operation._operation_count += 1
-
-        # If this operation is bound to a ResourceAPI
-        self.binding = None
-
-    def __hash__(self):
-        return self._hash_id
-
-    def __call__(self, *args, **kwargs):
-        return self.callback(*args, **kwargs)
-
-    def dispatch(self, request, **path_args):
-        # Authorisation hook
-        if hasattr(self, 'handle_authorisation'):
-            self.handle_authorisation(request)
-
-        # Allow for a pre_dispatch hook, a response from pre_dispatch would indicate an override of kwargs
-        if hasattr(self, 'pre_dispatch'):
-            response = self.pre_dispatch(request, **path_args)
-            if response is not None:
-                path_args = response
-
-        # callbacks are obtained prior to binding hence methods are unbound and self needs to be supplied.
-        result = self.callback(self, request, **path_args)
-
-        # Allow for a post_dispatch hook, the response of which is returned
-        if hasattr(self, 'post_dispatch'):
-            return self.post_dispatch(request, result)
-        else:
-            return result
-
-    @property
-    def is_bound(self):
-        # type: () -> bool
-        """
-        Operation is bound to a resource api
-        """
-        return bool(self.binding)
-
-    @lazy_property
-    def operation_id(self):
-        return self.base_callback.__name__
-
-    @lazy_property
-    def path(self):
-        resource_api = self.resource_api
-
-        path = list(resource_api.path_prefix) + [resource_api.api_name]
-
-        if self.path_type == PathType.Resource:
-            path.append(PathNode(resource_api.resource_id_name, resource_api.resource_id_type, None))
-
-        return path + list(self.sub_path or [])
-
-    def bind_to_instance(self, instance):
-        self.resource_api = instance
 
 collection = collection_action = action = route = Operation.decorate
 
