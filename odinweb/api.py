@@ -8,13 +8,13 @@ from __future__ import absolute_import, unicode_literals
 import logging
 
 from functools import wraps
-from itertools import chain
-from typing import Callable, Union, Tuple
+from typing import Callable, Union, Tuple, List, Any, Optional
 
 from odin import Resource
 from odin.codecs import json_codec
 from odin.exceptions import ValidationError, CodecDecodeError
-from odin.utils import getmeta, lazy_property
+from odin.utils import getmeta, lazy_property, force_tuple
+from odinweb.data_structures import UrlPath
 
 from . import _compat
 from . import content_type_resolvers
@@ -56,6 +56,9 @@ def resolve_content_type(type_resolvers, request):
             return content_type
 
 
+Tags = Union[str, Tuple[str]]
+
+
 class Operation(object):
     """
     Decorator for defining an API operation. Usually one of the helpers (listing, detail, update, delete) would be
@@ -75,9 +78,8 @@ class Operation(object):
     _operation_count = 0
 
     @classmethod
-    def decorate(cls, func=None, path_type=PathType.Collection, methods=Method.GET, resource=None, sub_path=None,
-                 tags=None):
-        # type: (Callable, PathType, Union(Method, Tuple[Method]), Type[Resource], SubPath, Tags) -> Operation
+    def decorate(cls, func=None, url_path=None, methods=Method.GET, resource=None, tags=None):
+        # type: (Callable, UrlPath, Union(Method, Tuple[Method]), Type[Resource], Tags) -> Operation
         """
         :param func: Function we are routing
         :param path_type: Type of path, list/detail or custom.
@@ -88,16 +90,15 @@ class Operation(object):
         :param tags: Tags to be applied to operation
         """
         def inner(f):
-            return cls(f, path_type, methods, resource, sub_path, tags)
+            return cls(f, url_path, methods, resource, tags)
         return inner(func) if func else inner
 
-    def __init__(self, callback, path_type, methods, resource, sub_path, tags):
-        # type: (Callable, PathType, Union(Method, Tuple[Method]), Type[Resource], SubPath, Tags) -> Operation
+    def __init__(self, callback, url_path, methods, resource, tags):
+        # type: (Callable, UrlPath, Union(Method, Tuple[Method]), Type[Resource], Tags) -> None
         self.base_callback = self.callback = callback
-        self.path_type = path_type
+        self.url_path = url_path
         self.methods = force_tuple(methods)
         self.resource = resource
-        self.sub_path = force_tuple(sub_path)
         self.tags = tags
 
         self._hash_id = Operation._operation_count
@@ -422,37 +423,41 @@ class ApiContainer(object):
     can also be nested. This is used to support versions etc.
     
     """
-    def __init__(self, *endpoints, **options):
-        self.endpoints = endpoints
+    def __init__(self, *containers, **options):
+        # type: (*Union[Operation, ApiContainer], **Any) -> None
+        self.containers = containers
 
-        self.name = options.pop('name', None)
+        # Having options at the end is  work around until support for
+        # Python < 3.5 is dropped, at that point keyword only args will
+        # be used in place of the options kwargs. eg:
+        #   (*containers:Union[Operation, ApiContainer], name:str=None, path_prefix:Union[str, UrlPath]=None) -> None
+        self.name = name = options.pop('name', None)
         path_prefix = options.pop('path_prefix', None)
-        if not path_prefix:
-            path_prefix = [self.name] if self.name else []
-        self.path_prefix = path_prefix
+        if path_prefix:
+            self.path_prefix = UrlPath.from_object(path_prefix)
+        elif name:
+            self.path_prefix = UrlPath.parse(name)
+        else:
+            self.path_prefix = UrlPath()
 
         if options:
             raise TypeError("Got an unexpected keyword argument(s) {}", options.keys())
 
-    def api_routes(self, path_prefix=None):
+    def operations(self, path_prefix=None):
+        # type: (Optional[Union[str, UrlPath]]) -> List[Operation]
         """
-        Return all of the API routes defined the API endpoints in the container.
+        Return all operations stored in containers.
         """
         if path_prefix is None:
             path_prefix = self.path_prefix
+        else:
+            path_prefix = UrlPath.from_object(path_prefix)
 
-        for endpoint in self.endpoints:
-            endpoint.parent = self
-            for api_route in endpoint.api_routes():
-                yield ApiRoute(chain(path_prefix, api_route.path), *api_route[1:])
-
-        if hasattr(self, 'additional_routes'):
-            additional_routes = self.additional_routes
-            if callable(additional_routes):
-                additional_routes = additional_routes()
-
-            for api_route in additional_routes:
-                yield ApiRoute(chain(path_prefix, api_route.path), *api_route[1:])
+        for container in self.containers:
+            container.parent = self
+            for operation in container.operations():
+                # TODO: Decide on a a design for building the full URL path
+                yield operation
 
     def referenced_resources(self):
         # type: () -> set
@@ -460,20 +465,8 @@ class ApiContainer(object):
         Return a set of resources referenced by the API.
         """
         resources = set()
-        for endpoint in self.endpoints:
-            if isinstance(endpoint, ResourceApi):
-                # Add ResourceApi resource
-                if endpoint.resource:
-                    resources.add(endpoint.resource)
-
-                # Add any route specific resources
-                resources.update(r.callback.resource
-                                 for r in endpoint.api_routes()
-                                 if getattr(r.operation, 'resource', None))
-
-            elif isinstance(endpoint, ApiContainer):
-                resources.update(endpoint.referenced_resources())
-
+        for operation in self.operations():
+            resources.update(operation.resources)
         return resources
 
 
@@ -497,10 +490,11 @@ class ApiVersion(ApiCollection):
     """
     Collection that defines a version of an API.
     """
-    def __init__(self, *endpoints, **options):
+    def __init__(self, *containers, **options):
+        # type: (*Union[Operation, ApiContainer], **Any) -> None
         self.version = options.pop('version', 1)
         options.setdefault('name', 'v{}'.format(self.version))
-        super(ApiVersion, self).__init__(*endpoints, **options)
+        super(ApiVersion, self).__init__(*containers, **options)
 
 
 class ApiInterfaceBase(ApiContainer):
@@ -541,12 +535,14 @@ class ApiInterfaceBase(ApiContainer):
     Remap certain codecs commonly mistakenly used.
     """
 
-    def __init__(self, *endpoints, **options):
+    def __init__(self, *containers, **options):
         options.setdefault('name', 'api')
-        url_prefix = options.pop('url_prefix', '/')
+        options.setdefault('path_prefix', '/')
         self.debug_enabled = options.pop('debug_enabled', False)
-        super(ApiInterfaceBase, self).__init__(*endpoints, **options)
-        self.path_prefix.insert(0, url_prefix.rstrip('/'))
+        super(ApiInterfaceBase, self).__init__(*containers, **options)
+
+        if not self.path_prefix.is_absolute:
+            raise ValueError("Path prefix must be an absolute path (eg start with a '/')")
 
     def dispatch(self, op_callback, request, **kwargs):
         # Determine the request and response types. Ensure API supports the requested types

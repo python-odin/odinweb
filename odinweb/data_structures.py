@@ -1,8 +1,8 @@
 from collections import namedtuple
-from typing import Dict, Union, List, Optional, Callable
+from typing import Dict, Union, List, Optional, Callable, Any
 
+from . import _compat
 from .constants import *
-
 
 # Generic definition for a route to an API endpoint
 ApiRoute = namedtuple("ApiRoute", 'path methods operation')
@@ -54,6 +54,24 @@ class UrlPath(object):
     __slots__ = ('_nodes',)
 
     @classmethod
+    def from_object(cls, obj):
+        # type: (Any) -> UrlPath
+        """
+        Attempt to convert any object into a UrlPath.
+
+        Raise a value error if this is not possible.
+        """
+        if isinstance(obj, UrlPath):
+            return UrlPath(*obj._nodes)  # "Copy" object
+        if isinstance(obj, _compat.text_type):
+            return UrlPath.parse(obj)
+        if isinstance(obj, PathNode):
+            return UrlPath(obj)
+        if isinstance(obj, (tuple, list)):
+            return UrlPath(*obj)
+        raise ValueError("Unable to convert object to UrlPath `%r`" % obj)
+
+    @classmethod
     def parse(cls, url_path):
         # type: (str) -> UrlPath
         """
@@ -67,6 +85,12 @@ class UrlPath(object):
 
     def __str__(self):
         return self.format()
+
+    def __repr__(self):
+        return "{}({})".format(
+            self.__class__.__name__,
+            ', '.join(repr(n) for n in self._nodes)
+        )
 
     def __add__(self, other):
         # type: (Union[UrlPath, str, PathNode]) -> UrlPath
@@ -94,6 +118,7 @@ class UrlPath(object):
 
     @property
     def is_absolute(self):
+        # type: () -> bool
         """
         Is an absolute URL
         """
