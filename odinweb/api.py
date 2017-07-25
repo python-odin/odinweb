@@ -7,17 +7,16 @@ from __future__ import absolute_import, unicode_literals
 
 import logging
 
-from typing import Callable, Union, Tuple, List, Any, Optional
+from typing import Callable, Union, Tuple, List, Any, Optional, AnyStr, Dict
 
 from odin import Resource
 from odin.codecs import json_codec
 from odin.exceptions import ValidationError, CodecDecodeError
 from odin.utils import getmeta, lazy_property, force_tuple
-from odinweb.data_structures import UrlPath
 
 from . import _compat
 from . import content_type_resolvers
-from .data_structures import ApiRoute, HttpResponse
+from .data_structures import UrlPath, HttpResponse
 from .exceptions import ImmediateHttpResponse, HttpError
 from .resources import Error
 from .utils import parse_content_type
@@ -55,7 +54,11 @@ def resolve_content_type(type_resolvers, request):
             return content_type
 
 
+# Type definitions
 Tags = Union[str, Tuple[str]]
+HttpRequest = Any
+PreDispatch = Callable[[HttpRequest, Dict[str, Any]], HttpResponse]
+PostDispatch = Callable[[HttpRequest, HttpResponse], HttpResponse]
 
 
 class Operation(object):
@@ -96,8 +99,8 @@ class Operation(object):
         self.base_callback = self.callback = callback
         self.url_path = url_path
         self.methods = force_tuple(methods)
-        self.resource = resource
-        self.tags = tags
+        self._resource = resource
+        self._tags = tags
 
         self._hash_id = Operation._operation_count
         Operation._operation_count += 1
@@ -105,37 +108,47 @@ class Operation(object):
         # If this operation is bound to a ResourceAPI
         self.binding = None
 
+        # Dispatch hooks
+        self._pre_dispatch = getattr(self, 'pre_dispatch', None)  # type: PreDispatch
+        self._post_dispatch = getattr(self, 'post_dispatch', None)  # type: PostDispatch
+
     def __hash__(self):
         return self._hash_id
 
-    def __call__(self, *args, **kwargs):
-        return self.callback(*args, **kwargs)
+    def __call__(self, request, path_args):
+        # type: (HttpRequest, Dict[Any]) -> Any
+
+        # Allow for a pre_dispatch hook, path_args is passed by ref so changes can be made.
+        if self._pre_dispatch:
+            self._pre_dispatch(request, path_args)
+
+        response = self.callback(request, **path_args)
+
+        # Allow for a post_dispatch hook, the response of which is returned
+        if self._post_dispatch:
+            return self._post_dispatch(request, response)
+        else:
+            return response
 
     def bind_to_instance(self, instance):
         self.binding = instance
 
-    def operations(self, path_prefix=None):
-        # type: (Optional[Union[str, UrlPath]]) -> List[Operation]
+        # Configure pre-bindings
+        if self._pre_dispatch is None:
+            self._pre_dispatch = getattr(instance, 'pre_dispatch', None)
+        if self._post_dispatch is None:
+            self._post_dispatch = getattr(instance, 'pos_dispatch', None)
+
+    def op_paths(self, path_prefix=None):
+        # type: (Optional[Union[str, UrlPath]]) -> Tuple[Tuple[UrlPath, Operation]]
         """
-        Return all operations stored in containers.
+        Yield operations paths stored in containers.
         """
-        return [self]
+        url_path = self.url_path
+        if path_prefix:
+            url_path = path_prefix + url_path
 
-    def dispatch(self, request, **path_args):
-        # Allow for a pre_dispatch hook, a response from pre_dispatch would indicate an override of kwargs
-        if self.binding and hasattr(self, 'pre_dispatch'):
-            response = self.pre_dispatch(request, **path_args)
-            if response is not None:
-                path_args = response
-
-        # callbacks are obtained prior to binding hence methods are unbound and self needs to be supplied.
-        result = self.callback(self, request, **path_args)
-
-        # Allow for a post_dispatch hook, the response of which is returned
-        if hasattr(self, 'post_dispatch'):
-            return self.post_dispatch(request, result)
-        else:
-            return result
+        yield url_path, self
 
     @property
     def is_bound(self):
@@ -148,6 +161,29 @@ class Operation(object):
     @lazy_property
     def operation_id(self):
         return self.base_callback.__name__
+
+    @lazy_property
+    def resource(self):
+        """
+        Resource associated with operation.
+        """
+        if self.resource:
+            return self.resource
+        elif self.binding:
+            return self.binding.resource
+
+    @lazy_property
+    def tags(self):
+        # type: () -> List[AnyStr]
+        """
+        Tags applied to operation.
+        """
+        tags = []
+        if self._tags:
+            tags.extend(self._tags)
+        if self.binding and self.binding.tags:
+            tags.extend(self.binding.tags)
+        return tags
 
 
 class ResourceApiMeta(type):
@@ -324,18 +360,21 @@ class ApiContainer(object):
         if options:
             raise TypeError("Got an unexpected keyword argument(s) {}", options.keys())
 
-    def operations(self, path_base=None):
+    def op_paths(self, path_base=None):
         # type: (Optional[Union[str, UrlPath]]) -> List[Operation]
         """
         Return all operations stored in containers.
         """
         if path_base:
-            path_base += self.path_prefix
+            if self.path_prefix:
+                path_base += self.path_prefix
+        else:
+            path_base = self.path_prefix or UrlPath()
 
         for container in self.containers:
             container.parent = self
-            for operation in container.operations(path_base):
-                yield operation
+            for op_path in container.op_paths(path_base):
+                yield op_path
 
 
 class ApiCollection(ApiContainer):
@@ -405,7 +444,7 @@ class ApiInterfaceBase(ApiContainer):
 
     def __init__(self, *containers, **options):
         options.setdefault('name', 'api')
-        options.setdefault('path_prefix', '/')
+        options.setdefault('path_prefix', UrlPath('', options['name']))
         self.debug_enabled = options.pop('debug_enabled', False)
         super(ApiInterfaceBase, self).__init__(*containers, **options)
 
@@ -443,8 +482,8 @@ class ApiInterfaceBase(ApiContainer):
             return HttpResponse.from_status(HTTPStatus.NOT_ACCEPTABLE)
 
         # Check if method is in our allowed method list
-        # if request.method not in methods:
-        #     return HttpResponse.from_status(HTTPStatus.METHOD_NOT_ALLOWED, {'Allow', ','.join(methods)})
+        if request.method not in operation.methods:
+            return HttpResponse.from_status(HTTPStatus.METHOD_NOT_ALLOWED, {'Allow', ','.join(operation.methods)})
 
         # Response types
         status = headers = None
@@ -460,15 +499,13 @@ class ApiInterfaceBase(ApiContainer):
         except ValidationError as e:
             # A validation error was raised by a resource.
             if hasattr(e, 'message_dict'):
-                resource = Error.from_status(HTTPStatus.BAD_REQUEST, 0, "Failed validation",
-                                             meta=e.message_dict)
+                resource = Error.from_status(HTTPStatus.BAD_REQUEST, 0, "Failed validation", meta=e.message_dict)
             else:
                 resource = Error.from_status(HTTPStatus.BAD_REQUEST, 0, str(e))
             status = resource.status
 
         except NotImplementedError:
-            resource = Error.from_status(HTTPStatus.NOT_IMPLEMENTED, 0,
-                                         "The method has not been implemented")
+            resource = Error.from_status(HTTPStatus.NOT_IMPLEMENTED, 0, "The method has not been implemented")
             status = resource.status
 
         except Exception as e:
