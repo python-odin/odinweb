@@ -62,7 +62,7 @@ class UrlPath(object):
         Raise a value error if this is not possible.
         """
         if isinstance(obj, UrlPath):
-            return UrlPath(*obj._nodes)  # "Copy" object
+            return obj
         if isinstance(obj, _compat.text_type):
             return UrlPath.parse(obj)
         if isinstance(obj, PathNode):
