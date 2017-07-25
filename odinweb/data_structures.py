@@ -1,11 +1,8 @@
 from collections import namedtuple
-from typing import Dict, Union, List, Optional, Callable, Any
+from typing import Dict, Union, Optional, Callable, Any, AnyStr
 
 from . import _compat
 from .constants import *
-
-# Generic definition for a route to an API endpoint
-ApiRoute = namedtuple("ApiRoute", 'path methods operation')
 
 
 class HttpResponse(object):
@@ -20,6 +17,7 @@ class HttpResponse(object):
         return cls(http_status.description or http_status.phrase, http_status, headers)
 
     def __init__(self, body, status=HTTPStatus.OK, headers=None):
+        # type: (Any, HTTPStatus, Dict[str, AnyStr]) -> None
         self.body = body
         if isinstance(status, HTTPStatus):
             status = status.value
@@ -27,12 +25,18 @@ class HttpResponse(object):
         self.headers = headers or {}
 
     def __getitem__(self, item):
+        # type: (str) -> AnyStr
         return self.headers[item]
 
     def __setitem__(self, key, value):
+        # type: (str, AnyStr) -> None
         self.headers[key] = value
 
     def set_content_type(self, value):
+        # type: (AnyStr) -> None
+        """
+        Set Response content type.
+        """
         self.headers['content-type'] = value
 
 
