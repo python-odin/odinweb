@@ -483,13 +483,16 @@ class ApiInterfaceBase(ApiContainer):
 
         # Check if method is in our allowed method list
         if request.method not in operation.methods:
-            return HttpResponse.from_status(HTTPStatus.METHOD_NOT_ALLOWED, {'Allow', ','.join(operation.methods)})
+            return HttpResponse.from_status(
+                HTTPStatus.METHOD_NOT_ALLOWED,
+                {'Allow', ','.join(m.value for m in operation.methods)}
+            )
 
         # Response types
         status = headers = None
 
         try:
-            resource = operation(request, **path_args)
+            resource = operation(request, path_args)
 
         except ImmediateHttpResponse as e:
             # An exception used to return a response immediately, skipping any
