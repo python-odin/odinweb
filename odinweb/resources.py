@@ -9,6 +9,7 @@ Common resources for use in APIs.
 import odin
 
 from odin.fields import Field
+from typing import AnyStr
 
 from . import constants
 
@@ -61,7 +62,7 @@ class Error(odin.Resource):
 
     @classmethod
     def from_status(cls, http_status, code_index=0, message=None, developer_message=None, meta=None):
-        # type: (constants.HTTPStatus, int, str, str, dict) -> Error
+        # type: (constants.HTTPStatus, int, AnyStr, AnyStr, dict) -> Error
         """
         Automatically build an HTTP response from the HTTP Status code.
         
