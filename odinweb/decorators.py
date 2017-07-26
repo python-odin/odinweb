@@ -73,7 +73,7 @@ class Operation(object):
         :param tags: Tags to be applied to operation
         """
         self.base_callback = self.callback = callback
-        self.url_path = url_path
+        self.url_path = UrlPath.from_object(url_path)
         self.methods = force_tuple(methods)
         self._resource = resource
 
