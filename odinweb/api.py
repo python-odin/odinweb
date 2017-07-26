@@ -123,6 +123,11 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
     Prefix to prepend to any generated path.
     """
 
+    tags = None
+    """
+    Resource API tags
+    """
+
     parent = None
 
     def __init__(self):
