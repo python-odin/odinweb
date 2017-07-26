@@ -7,23 +7,23 @@ from __future__ import absolute_import, unicode_literals
 
 import logging
 
-from typing import Callable, Union, Tuple, List, Any, Optional, AnyStr, Dict
+from typing import Callable, Union, Tuple, List, Any, Optional, Generator
 
 from odin import Resource
 from odin.codecs import json_codec
-from odin.exceptions import ValidationError, CodecDecodeError
-from odin.utils import getmeta, lazy_property, force_tuple
+from odin.exceptions import ValidationError
+from odin.utils import getmeta
 
 from . import _compat
 from . import content_type_resolvers
-from .data_structures import UrlPath, HttpResponse
-from .exceptions import ImmediateHttpResponse, HttpError
+from .data_structures import UrlPath, NoPath, HttpResponse
 from .resources import Error
 from .utils import parse_content_type
 
 # Import all to simplify end user API.
 from .constants import *  # noqa
-# from .decorators import *  # noqa
+from .decorators import *  # noqa
+from .exceptions import *  # noqa
 
 logger = logging.getLogger(__name__)
 
@@ -52,138 +52,6 @@ def resolve_content_type(type_resolvers, request):
         content_type = parse_content_type(resolver(request))
         if content_type:
             return content_type
-
-
-# Type definitions
-Tags = Union[str, Tuple[str]]
-HttpRequest = Any
-PreDispatch = Callable[[HttpRequest, Dict[str, Any]], HttpResponse]
-PostDispatch = Callable[[HttpRequest, HttpResponse], HttpResponse]
-
-
-class Operation(object):
-    """
-    Decorator for defining an API operation. Usually one of the helpers (listing, detail, update, delete) would be
-    used in place of this route decorator.
-
-    Usage::
-
-        class ItemApi(ResourceApi):
-            resource = Item
-
-            @route(path=PathType.Collection, methods=Method.GET)
-            def list_items(self, request):
-                ...
-                return items
-
-    """
-    _operation_count = 0
-
-    @classmethod
-    def decorate(cls, func=None, url_path=None, methods=Method.GET, resource=None, tags=None):
-        # type: (Callable, UrlPath, Union(Method, Tuple[Method]), Type[Resource], Tags) -> Operation
-        """
-        :param func: Function we are routing
-        :param url_path: A sub path that can be used as a action.
-        :param methods: HTTP method(s) this function responses to.
-        :param resource: Specify the resource that this function encodes/decodes,
-            default is the one specified on the ResourceAPI instance.
-        :param tags: Tags to be applied to operation
-        """
-        def inner(f):
-            return cls(f, url_path, methods, resource, tags)
-        return inner(func) if func else inner
-
-    def __init__(self, callback, url_path, methods, resource, tags):
-        # type: (Callable, UrlPath, Union(Method, Tuple[Method]), Type[Resource], Tags) -> None
-        self.base_callback = self.callback = callback
-        self.url_path = url_path
-        self.methods = force_tuple(methods)
-        self._resource = resource
-        self._tags = tags
-
-        self._hash_id = Operation._operation_count
-        Operation._operation_count += 1
-
-        # If this operation is bound to a ResourceAPI
-        self.binding = None
-
-        # Dispatch hooks
-        self._pre_dispatch = getattr(self, 'pre_dispatch', None)  # type: PreDispatch
-        self._post_dispatch = getattr(self, 'post_dispatch', None)  # type: PostDispatch
-
-    def __hash__(self):
-        return self._hash_id
-
-    def __call__(self, request, path_args):
-        # type: (HttpRequest, Dict[Any]) -> Any
-
-        # Allow for a pre_dispatch hook, path_args is passed by ref so changes can be made.
-        if self._pre_dispatch:
-            self._pre_dispatch(request, path_args)
-
-        response = self.callback(request, **path_args)
-
-        # Allow for a post_dispatch hook, the response of which is returned
-        if self._post_dispatch:
-            return self._post_dispatch(request, response)
-        else:
-            return response
-
-    def bind_to_instance(self, instance):
-        self.binding = instance
-
-        # Configure pre-bindings
-        if self._pre_dispatch is None:
-            self._pre_dispatch = getattr(instance, 'pre_dispatch', None)
-        if self._post_dispatch is None:
-            self._post_dispatch = getattr(instance, 'pos_dispatch', None)
-
-    def op_paths(self, path_prefix=None):
-        # type: (Optional[Union[str, UrlPath]]) -> Tuple[Tuple[UrlPath, Operation]]
-        """
-        Yield operations paths stored in containers.
-        """
-        url_path = self.url_path
-        if path_prefix:
-            url_path = path_prefix + url_path
-
-        yield url_path, self
-
-    @property
-    def is_bound(self):
-        # type: () -> bool
-        """
-        Operation is bound to a resource api
-        """
-        return bool(self.binding)
-
-    @lazy_property
-    def operation_id(self):
-        return self.base_callback.__name__
-
-    @lazy_property
-    def resource(self):
-        """
-        Resource associated with operation.
-        """
-        if self.resource:
-            return self.resource
-        elif self.binding:
-            return self.binding.resource
-
-    @lazy_property
-    def tags(self):
-        # type: () -> List[AnyStr]
-        """
-        Tags applied to operation.
-        """
-        tags = []
-        if self._tags:
-            tags.extend(self._tags)
-        if self.binding and self.binding.tags:
-            tags.extend(self.binding.tags)
-        return tags
 
 
 class ResourceApiMeta(type):
@@ -250,7 +118,7 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
     Name of the resource ID field
     """
 
-    path_prefix = []
+    path_prefix = UrlPath()
     """
     Prefix to prepend to any generated path.
     """
@@ -261,75 +129,22 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
         if not hasattr(self, 'api_name'):
             self.api_name = "{}".format(getmeta(self.resource).name.lower())
 
-        self._api_routes = None
+        # Append APIs name to path prefix
+        self.path_prefix += self.api_name
 
         for operation in self._operations:
             operation.bind_to_instance(self)
 
-    @property
-    def debug_enabled(self):
+    def op_paths(self, path_base):
+        # type: (Union[str, UrlPath]) -> Generator[Tuple[UrlPath, Operation]]
         """
-        Is debugging enabled?
+        Return all operations stored in containers.
         """
-        if self.parent:
-            return self.parent.debug_enabled
-        return False
+        path_base += self.path_prefix
 
-    def dispatch(self, callback, request, **path_args):
-        # Authorisation hook
-        if hasattr(self, 'handle_authorisation'):
-            self.handle_authorisation(request)
-
-        # Allow for a pre_dispatch hook, a response from pre_dispatch would indicate an override of kwargs
-        if hasattr(self, 'pre_dispatch'):
-            response = self.pre_dispatch(request, **path_args)
-            if response is not None:
-                path_args = response
-
-        # callbacks are obtained prior to binding hence methods are unbound and self needs to be supplied.
-        result = callback(self, request, **path_args)
-
-        # Allow for a post_dispatch hook, the response of which is returned
-        if hasattr(self, 'post_dispatch'):
-            return self.post_dispatch(request, result)
-        else:
-            return result
-
-    def decode_body(self, request):
-        """
-        Helper method that ensures that decodes any body content into a string object
-        (this is needed by the json module for example).
-        """
-        body = request.body
-        if isinstance(body, bytes):
-            return body.decode('UTF8')
-        return body
-
-    def get_resource(self, request, allow_multiple=False, resource=None):
-        """
-        Get a resource instance from ``request.body``.
-        """
-        resource = resource or self.resource
-
-        try:
-            body = self.decode_body(request)
-        except UnicodeDecodeError as ude:
-            raise HttpError(HTTPStatus.BAD_REQUEST, 40099, "Unable to decode request body.", str(ude))
-
-        try:
-            resource = request.request_codec.loads(body, resource=resource, full_clean=False)
-
-        except ValueError as ve:
-            raise HttpError(HTTPStatus.BAD_REQUEST, 40098, "Unable to load resource.", str(ve))
-
-        except CodecDecodeError as cde:
-            raise HttpError(HTTPStatus.BAD_REQUEST, 40096, "Unable to decode body.", str(cde))
-
-        # Check an array of data hasn't been supplied
-        if not allow_multiple and isinstance(resource, list):
-            raise HttpError(HTTPStatus.BAD_REQUEST, 40097, "Expected a single resource not a list.")
-
-        return resource
+        for operation in self._operations:
+            for op_path in operation.op_paths(path_base):
+                yield op_path
 
 
 class ApiContainer(object):
@@ -341,8 +156,8 @@ class ApiContainer(object):
     
     """
     def __init__(self, *containers, **options):
-        # type: (*Union[Operation, ApiContainer], **Any) -> None
-        self.containers = containers
+        # type: (*Union[Operation, ApiContainer, ResourceApi], **Any) -> None
+        self.containers = list(containers)
 
         # Having options at the end is  work around until support for
         # Python < 3.5 is dropped, at that point keyword only args will
@@ -355,10 +170,28 @@ class ApiContainer(object):
         elif name:
             self.path_prefix = UrlPath.parse(name)
         else:
-            self.path_prefix = UrlPath()
+            self.path_prefix = NoPath
 
         if options:
             raise TypeError("Got an unexpected keyword argument(s) {}", options.keys())
+
+    def operation(self, func=None, url_path=None, methods=Method.GET, resource=None, tags=None):
+        # type: (Callable, UrlPath, Union(Method, Tuple[Method]), Type[Resource], Tags) -> Operation
+        """
+        :param func: Function we are routing
+        :param url_path: A sub path that can be used as a action.
+        :param methods: HTTP method(s) this function responses to.
+        :param resource: Specify the resource that this function encodes/decodes,
+            default is the one specified on the ResourceAPI instance.
+        :param tags: Tags to be applied to operation
+
+        """
+        def inner(callback):
+            operation = Operation(callback, url_path, methods, resource, tags)
+            self.containers.append(operation)
+            return operation
+
+        return inner(func) if func else inner
 
     def op_paths(self, path_base=None):
         # type: (Optional[Union[str, UrlPath]]) -> List[Operation]
