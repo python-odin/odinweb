@@ -5,16 +5,19 @@ Utils
 Utility functions used to perform common operations.
 
 """
-from __future__ import absolute_import, unicode_literals
+from __future__ import absolute_import
 
 import os
 import base64
 import itertools
 
+from typing import Any
+
 from . import _compat
 
 
 def random_string(bit_depth=64):
+    # type: (int) -> str
     """
     Generate a random string of a certain bit depth
     """
