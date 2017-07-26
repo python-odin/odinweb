@@ -10,7 +10,8 @@ from odinweb import api, doc
 from odinweb import resources
 from odinweb._compat import *
 from odinweb.constants import *
-from odinweb.decorators import RouteDefinition, Operation
+from odinweb.data_structures import PathNode, UrlPath
+from odinweb.decorators import Operation
 from odinweb.utils import dict_filter
 
 DATA_TYPE_MAP = {
@@ -83,20 +84,18 @@ class SwaggerSpec(api.ResourceApi):
     """
     Resource API instance that generates a Swagger spec of the current API.
     """
-    SWAGGER_TAG = 'swagger'
-
     api_name = 'swagger'
+    SWAGGER_TAG = 'swagger'
     tags = (SWAGGER_TAG, )
 
     def __init__(self, title, enable_ui=False, host=None, schemes=None):
         # Register UI routes
         if enable_ui:
             self._operations.append(Operation(
-                SwaggerSpec.get_ui, api.PathType.Collection, Method.GET, None, 'ui'
+                SwaggerSpec.get_ui, api.UrlPath.parse('ui'), Method.GET,
             ))
             self._operations.append(Operation(
-                SwaggerSpec.get_static, api.PathType.Collection, Method.GET, None,
-                ('ui', api.PathNode('file_name', api.Type.String))
+                SwaggerSpec.get_static, api.UrlPath('ui', PathNode('file_name', api.Type.String))
             ))
 
         super(SwaggerSpec, self).__init__()
@@ -112,16 +111,16 @@ class SwaggerSpec(api.ResourceApi):
         """
         Calculate the APIs base path
         """
-        path = []
+        path = UrlPath()
 
         # Walk up the API to find the base object
         parent = self.parent
         while parent:
             if parent.path_prefix:
-                path.append(parent.path_prefix)
+                path = parent.path_prefix + path
             parent = getattr(parent, 'parent', None)
 
-        return '/'.join(itertools.chain.from_iterable(reversed(path)))
+        return path
 
     @property
     def swagger_path(self):
@@ -185,9 +184,8 @@ class SwaggerSpec(api.ResourceApi):
         })
         return definitions
 
-    @api.route
-    @doc.operation(tags=('swagger',))
-    @doc.response(200, "Swagger JSON of this API")
+    @api.Operation
+    # @doc.response(200, "Swagger JSON of this API")
     def get_swagger(self, request):
         """
         Generate this document.
@@ -205,11 +203,11 @@ class SwaggerSpec(api.ResourceApi):
             },
             'host': self.host or request.host,
             'schemes': self.schemes,
-            'basePath': self.base_path,
+            'basePath': str(self.base_path),
             'consumes': list(api.CODECS.keys()),
             'produces': list(api.CODECS.keys()),
-            'paths': self.flatten_routes(api_base),
-            'definitions': self.resource_definitions(api_base),
+            # 'paths': self.flatten_routes(api_base),
+            # 'definitions': self.resource_definitions(api_base),
         })
 
     def load_static(self, file_name):
@@ -226,9 +224,8 @@ class SwaggerSpec(api.ResourceApi):
         except OSError:
             raise api.HttpError(404, 40401, "Not found")
 
-    @doc.operation(tags=('swagger',))
-    @doc.response(200, "HTML content")
-    @doc.produces('text/html')
+    # @doc.response(200, "HTML content")
+    # @doc.produces('text/html')
     def get_ui(self, request):
         """
         Load the Swagger UI interface
@@ -240,8 +237,7 @@ class SwaggerSpec(api.ResourceApi):
             self._ui_cache = content.replace(u"{{SWAGGER_PATH}}", self.swagger_path)
         return api.HttpResponse(self._ui_cache, headers={'ContentType': 'text/html'})
 
-    @doc.operation(tags=('swagger',))
-    @doc.response(200, "HTML content")
+    # @doc.response(200, "HTML content")
     def get_static(self, request, file_name=None):
         """
         Get static content for UI.
