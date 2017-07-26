@@ -100,7 +100,7 @@ class UrlPath(object):
         # type: (Union[UrlPath, str, PathNode]) -> UrlPath
         if isinstance(other, UrlPath):
             return UrlPath(*_add_nodes(self._nodes, other._nodes))
-        if isinstance(other, str):
+        if isinstance(other, _compat.string_types):
             return self + UrlPath.parse(other)
         if isinstance(other, PathNode):
             return UrlPath(*_add_nodes(self._nodes, (other,)))
@@ -108,7 +108,7 @@ class UrlPath(object):
 
     def __radd__(self, other):
         # type: (Union[str, PathNode]) -> UrlPath
-        if isinstance(other, str):
+        if isinstance(other, _compat.string_types):
             return UrlPath.parse(other) + self
         if isinstance(other, PathNode):
             return UrlPath(*_add_nodes((other,), self._nodes))
@@ -157,3 +157,5 @@ class UrlPath(object):
         """
         node_formatter = node_formatter or self.odinweb_node_formatter
         return '/'.join(node_formatter(n) if isinstance(n, PathNode) else n for n in self._nodes)
+
+NoPath = UrlPath()
