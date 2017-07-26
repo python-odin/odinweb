@@ -124,7 +124,7 @@ class SwaggerSpec(api.ResourceApi):
 
     @property
     def swagger_path(self):
-        return self.base_path + '/swagger'
+        return self.base_path + 'swagger'
 
     @staticmethod
     def generate_parameters(path):
@@ -139,50 +139,36 @@ class SwaggerSpec(api.ResourceApi):
                 })
         return parameters
 
-    def flatten_routes(self, api_base):
+    def parse_operations(self):
         """
         Flatten routes into a path -> method -> route structure
         """
-        def parse_node(node):
-            return "{{{}}}".format(node.name) if isinstance(node, api.PathNode) else str(node)
-
-        paths = collections.OrderedDict()
-        for api_route in api_base.api_routes(api_base.path_prefix[1:]):
-            # We need to iterate this multiple times so convert to tuple
-            api_route_path = tuple(api_route.path)
-
-            # Add path spec object
-            path = '/' + '/'.join(parse_node(p) for p in api_route_path)
-
-            # Generate operation spec
-            docs = doc.OperationDoc.bind(api_route.operation)
-
-            # Filter out swagger endpoints
-            if self.SWAGGER_TAG in docs.tags:
-                continue
-
-            # Add path parameters
-            path_spec = paths.setdefault(path, {})
-            parameters = self.generate_parameters(api_route_path)
-            if parameters:
-                path_spec['parameters'] = parameters
-
-            # Add methods
-            for method in api_route.methods:
-                path_spec[method.lower()] = docs.to_dict()
-
-        return paths
-
-    def resource_definitions(self, api_base):
-        definitions = {
+        resource_defs = {
             getmeta(resources.Error).resource_name: resource_definition(resources.Error),
             getmeta(resources.Listing).resource_name: resource_definition(resources.Listing),
         }
-        definitions.update({
-            getmeta(resource).resource_name: resource_definition(resource)
-            for resource in api_base.referenced_resources()
-        })
-        return definitions
+
+        paths = collections.OrderedDict()
+        for path, operation in self.parent.op_paths():
+            # Filter out swagger endpoints
+            # if self.SWAGGER_TAG in operation.tags:
+            #     continue
+
+            # Add to resource definitions
+            if operation.resource:
+                resource_defs[getmeta(operation.resource).resource_name] = resource_definition(operation.resource)
+
+            # Add path parameters
+            path_spec = paths.setdefault(str(path), {})
+            # parameters = self.generate_parameters(api_route_path)
+            # if parameters:
+            #     path_spec['parameters'] = parameters
+
+            # Add methods
+            for method in operation.methods:
+                path_spec[method.value.lower()] = operation.to_doc()
+
+        return paths, resource_defs
 
     @api.Operation
     # @doc.response(200, "Swagger JSON of this API")
@@ -195,6 +181,7 @@ class SwaggerSpec(api.ResourceApi):
             raise api.HttpError(404, 40442, "Swagger not available.",
                                 "Swagger API is detached from a parent container.")
 
+        paths, definitions = self.parse_operations()
         return dict_filter({
             'swagger': '2.0',
             'info': {
@@ -206,8 +193,8 @@ class SwaggerSpec(api.ResourceApi):
             'basePath': str(self.base_path),
             'consumes': list(api.CODECS.keys()),
             'produces': list(api.CODECS.keys()),
-            # 'paths': self.flatten_routes(api_base),
-            # 'definitions': self.resource_definitions(api_base),
+            'paths': paths,
+            'definitions': definitions,
         })
 
     def load_static(self, file_name):
@@ -234,7 +221,7 @@ class SwaggerSpec(api.ResourceApi):
             content = self.load_static('ui.html')
             if isinstance(content, binary_type):
                 content = content.decode('UTF-8')
-            self._ui_cache = content.replace(u"{{SWAGGER_PATH}}", self.swagger_path)
+            self._ui_cache = content.replace(u"{{SWAGGER_PATH}}", str(self.swagger_path))
         return api.HttpResponse(self._ui_cache, headers={'ContentType': 'text/html'})
 
     # @doc.response(200, "HTML content")

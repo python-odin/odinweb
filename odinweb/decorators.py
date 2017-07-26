@@ -13,23 +13,21 @@ from typing import Callable, Union, Tuple, Type, Dict, Any, Optional, Generator,
 
 from odin import Resource
 from odin.exceptions import CodecDecodeError
-from odin.utils import force_tuple, lazy_property
+from odin.utils import force_tuple, lazy_property, getmeta
 
 from .constants import *
-from .data_structures import PathNode, NoPath, UrlPath, HttpResponse
+from .data_structures import NoPath, UrlPath, HttpResponse
 from .doc import OperationDoc
 from .exceptions import HttpError
 from .resources import Listing
-from .utils import to_bool, dict_filter
+from .utils import to_bool, dict_filter, dict_filter_update
 
 __all__ = (
     'Operation', 'ListOperation',
     # Basic routes
-    'route', 'collection', 'collection_action', 'resource_route', 'resource_action',
-    # Handlers
-    'list_response', 'resource_request',
+    'route', 'collection', 'collection_action', # 'resource_route', 'resource_action',
     # Shortcuts
-    'listing', 'create', 'detail', 'update', 'patch', 'delete', 'action', 'detail_action',
+    'listing', 'create', 'detail', 'update', 'patch', 'delete', 'action', #'detail_action',
 )
 
 # Type definitions
@@ -83,6 +81,13 @@ class Operation(object):
         self.sort_key = Operation._operation_count
         Operation._operation_count += 1
 
+        # If this operation is bound to a ResourceAPI
+        self.binding = None
+
+        # Dispatch hooks
+        self._pre_dispatch = getattr(self, 'pre_dispatch', None)  # type: PreDispatch
+        self._post_dispatch = getattr(self, 'post_dispatch', None)  # type: PostDispatch
+
         # Documentation
         self.deprecated = False
         self.summary = None
@@ -103,13 +108,6 @@ class Operation(object):
         self._parameters = defaultdict(lambda: defaultdict(dict))
         self._tags = set(force_tuple(tags))
 
-        # If this operation is bound to a ResourceAPI
-        self.binding = None
-
-        # Dispatch hooks
-        self._pre_dispatch = getattr(self, 'pre_dispatch', None)  # type: PreDispatch
-        self._post_dispatch = getattr(self, 'post_dispatch', None)  # type: PostDispatch
-
     def __call__(self, request, path_args):
         # type: (HttpRequest, Dict[Any]) -> Any
 
@@ -117,17 +115,21 @@ class Operation(object):
         if self._pre_dispatch:
             self._pre_dispatch(request, path_args)
 
-        if self.binding:
-            # Provide binding as decorators are executed prior to binding
-            response = self.callback(self.binding, request, **path_args)
-        else:
-            response = self.callback(request, **path_args)
+        response = self.execute(request, **path_args)
 
         # Allow for a post_dispatch hook, the response of which is returned
         if self._post_dispatch:
             return self._post_dispatch(request, response)
         else:
             return response
+
+    def execute(self, request, *args, **path_args):
+        # type: (HttpRequest, tuple, Dict[Any]) -> Any
+        if self.binding:
+            # Provide binding as decorators are executed prior to binding
+            return self.callback(self.binding, request, *args, **path_args)
+        else:
+            return self.callback(request, *args, **path_args)
 
     def bind_to_instance(self, instance):
         self.binding = instance
@@ -148,19 +150,6 @@ class Operation(object):
             url_path = path_prefix + url_path
 
         yield url_path, self
-
-    def to_doc(self):
-        return dict_filter(
-            operationId=self.operation_id,
-            description=self.description,
-            summary=self.summary,
-            tags=self.tags if self.tags else None,
-            deprecated=True if self.deprecated else None,
-            consumes=self.consumes if self.consumes else None,
-            # parameters=self.parameters,
-            produces=list(self.produces) if self.produces else None,
-            responses=self.responses if self.responses else None,
-        )
 
     def decode_body(self, request):
         """
@@ -196,22 +185,6 @@ class Operation(object):
 
         return resource
 
-    @property
-    def is_bound(self):
-        # type: () -> bool
-        """
-        Operation is bound to a resource api
-        """
-        return bool(self.binding)
-
-    @property
-    def description(self):
-        return (self.callback.__doc__ or '').strip()
-
-    @lazy_property
-    def operation_id(self):
-        return self.base_callback.__name__
-
     @lazy_property
     def resource(self):
         """
@@ -221,6 +194,37 @@ class Operation(object):
             return self._resource
         elif self.binding:
             return self.binding.resource
+
+    @property
+    def is_bound(self):
+        # type: () -> bool
+        """
+        Operation is bound to a resource api
+        """
+        return bool(self.binding)
+
+    # Docs ##########################################################
+
+    def to_doc(self):
+        return dict_filter(
+            operationId=self.operation_id,
+            description=self.description,
+            summary=self.summary,
+            tags=self.tags if self.tags else None,
+            deprecated=True if self.deprecated else None,
+            consumes=self.consumes if self.consumes else None,
+            parameters=self.parameters,
+            produces=list(self.produces) if self.produces else None,
+            responses=self.responses if self.responses else None,
+        )
+
+    @property
+    def description(self):
+        return (self.callback.__doc__ or '').strip()
+
+    @lazy_property
+    def operation_id(self):
+        return self.base_callback.__name__
 
     @property
     def tags(self):
@@ -235,66 +239,165 @@ class Operation(object):
             tags.extend(self.binding.tags)
         return tags
 
+    @property
+    def parameters(self):
+        results = []
 
-class ListOperation(Operation):
-    pass
+        for param_type in (In.Path, In.Header, In.Query, In.Form):
+            results.extend(self._parameters[param_type].values())
+
+        if In.Body in self._parameters:
+            body_param = self._parameters[In.Body]
+            if self.resource:
+                body_param['schema'] = {
+                    '$ref': '#/definitions/{}'.format(getmeta(self.resource).resource_name)
+                }
+            results.append(body_param)
+
+        return results or None
+
+    # Params ########################################################
+
+    def add_param(self, name, in_, **options):
+        # type: (name, In, **Any) -> None
+        """
+        Add parameter, you should probably use on of :meth:`path_param`, :meth:`query_param`,
+        :meth:`body_param`, or :meth:`header_param`.
+        """
+        dict_filter_update(self._parameters[in_][name], options)
+
+    def path_param(self, name, type_, description=None,
+                   default=None, minimum=None, maximum=None, enum_=None, **options):
+        """
+        Add Path parameter
+        """
+        self.add_param(
+            name, In.Path, type=type_.value, description=description,
+            default=default, minimum=minimum, maximum=maximum, enum=enum_,
+            **options
+        )
+
+    def query_param(self, name, type_, description=None, required=False,
+                    default=None, minimum=None, maximum=None, enum_=None, **options):
+        """
+        Add Query parameter
+        """
+        self.add_param(
+            name, In.Query, type=type_.value, description=description,
+            required=required or None, default=default, minimum=minimum, maximum=maximum, enum=enum_,
+            **options
+        )
+
+    def body_param(self, description=None, default=None, **options):
+        """
+        Set the body param
+        """
+        self._parameters[In.Body] = dict_filter(
+            {'name': 'body', 'in': In.Body.value, 'description': description, 'default': default},
+            options
+        )
+
+    def header_param(self, name, type_, description=None, default=None, required=False, **options):
+        """
+        Add a header parameter
+        """
+        self.add_param(
+            name, In.Header, type=type_.value, description=description, required=required or None,
+            default=default,
+            **options
+        )
 
 
 collection = collection_action = action = route = Operation
 
 
-def resource_route(func=None, method=Method.GET, resource=None, sub_path=None):
-    return Operation(func, PathType.Resource, method, resource, sub_path)
-
-resource_action = detail_action = resource_route
-
-
-# Handlers
-
-def list_response(func=None, max_offset=None, default_offset=0, max_limit=None, default_limit=50):
+class ListOperation(Operation):
     """
-    Handle processing a list. It is assumed decorator will operate on a class method.
+    Decorator to indicate a listing endpoint.
 
-    This decorator extracts offer/limit values from the query string and returns
-    a Listing response and applies total counts.
+    Usage::
+
+        class ItemApi(ResourceApi):
+            resource = Item
+
+            @listing(path=PathType.Collection, methods=Method.Get)
+            def list_items(self, request, offset, limit):
+                ...
+                return items
+
+    :param f: Function we are routing
+    :param resource: Specify the resource that this function
+        encodes/decodes, default is the one specified on the ResourceAPI
+        instance.
+    :param default_offset: Default value for the offset from the start of listing.
+    :param default_limit: Default value for limiting the response size.
 
     """
-    def inner(f):
-        docs = OperationDoc.bind(f)
-        docs.query_param('offset', Type.Integer, "Offset of first value", False, default_offset, 0, max_offset)
-        docs.query_param('limit', Type.Integer, "Number of returned values", False, default_limit, 1, max_limit)
-        docs.query_param('bare', Type.Boolean, "Return without list container", False, False)
-        docs.add_response(HTTPStatus.OK, 'OK', Listing)
+    listing_resource = Listing
+    default_offset = 0
+    default_limit = 50
+    max_offset = None
+    max_limit = None
 
-        @wraps(f)
-        def wrapper(self, request, *args, **kwargs):
-            # Get paging args from query string
-            offset = int(request.GET.get('offset', default_offset))
-            if offset < 0:
-                offset = 0
-            elif max_offset and offset > max_offset:
-                offset = max_offset
-            kwargs['offset'] = offset
+    def __init__(self, callback, url_path=NoPath, methods=Method.GET, resource=None, tags=None,
+                 listing_resource=None, default_offset=None, default_limit=None, max_offset=None, max_limit=None):
+        super(ListOperation, self).__init__(callback, url_path, methods, resource, tags)
+        if listing_resource:
+            self.listing_resource = listing_resource
+        if default_offset is not None:
+            self.default_offset = default_offset
+        if default_limit is not None:
+            self.default_limit = default_limit
+        if max_offset is not None:
+            self.max_offset = max_offset
+        if max_limit is not None:
+            self.max_limit = max_limit
 
-            limit = int(request.GET.get('limit', default_limit))
-            if limit < 1:
-                limit = 1
-            elif max_limit and limit > max_limit:
-                limit = max_limit
-            kwargs['limit'] = limit
+    def execute(self, request, *args, **path_args):
+        # Get paging args from query string
+        max_offset = self.max_offset
+        offset = int(request.GET.get('offset', self.default_offset))
+        if offset < 0:
+            offset = 0
+        elif max_offset and offset > max_offset:
+            offset = max_offset
+        path_args['offset'] = offset
 
-            bare = to_bool(request.GET.get('bare', False))
-            result = f(self, request, *args, **kwargs)
-            if result is not None:
-                if isinstance(result, tuple) and len(result) == 2:
-                    result, total_count = result
-                else:
-                    total_count = None
+        max_limit = self.max_limit
+        limit = int(request.GET.get('limit', self.default_limit))
+        if limit < 1:
+            limit = 1
+        elif max_limit and limit > max_limit:
+            limit = max_limit
+        path_args['limit'] = limit
 
-                return result if bare else Listing(result, limit, offset, total_count)
-        return wrapper
+        bare = to_bool(request.GET.get('bare', False))
 
-    return inner(func) if func else inner
+        result = super(ListOperation, self).execute(request, *args, **path_args)
+        if result is not None:
+            if isinstance(result, tuple) and len(result) == 2:
+                result, total_count = result
+            else:
+                total_count = None
+
+            return result if bare else Listing(result, limit, offset, total_count)
+
+
+listing = ListOperation
+
+
+class ResourceOperation(Operation):
+    """
+    Handle processing a request with a resource body.
+
+    It is assumed decorator will operate on a class method.
+    """
+    def __init__(self, *args, **kwargs):
+        super(ResourceOperation, self).__init__(*args, **kwargs)
+
+    def execute(self, request, *args, **path_args):
+        item = self.get_resource(request) if self.resource else None
+        return super(ResourceOperation, self).execute(request, item, *args, **path_args)
 
 
 def resource_request(func=None):
@@ -317,35 +420,6 @@ def resource_request(func=None):
 
 
 # Shortcut methods
-
-def listing(f=None, resource=Listing, max_offset=None, default_offset=0, max_limit=None, default_limit=50):
-    """
-    Decorator to indicate a listing endpoint.
-
-    Usage::
-
-        class ItemApi(ResourceApi):
-            resource = Item
-
-            @listing(path=PathType.Collection, methods=Method.Get)
-            def list_items(self, request, offset, limit):
-                ...
-                return items
-
-    :param f: Function we are routing
-    :param resource: Specify the resource that this function
-        encodes/decodes, default is the one specified on the ResourceAPI
-        instance.
-    :param default_offset: Default value for the offset from the start of listing.
-    :param default_limit: Default value for limiting the response size.
-
-    """
-    def inner(func):
-        return route(
-            list_response(func, max_offset, default_offset, max_limit, default_limit),
-            PathType.Collection, Method.GET, resource
-        )
-    return inner(f) if f else inner
 
 
 def create(f=None, resource=None):
