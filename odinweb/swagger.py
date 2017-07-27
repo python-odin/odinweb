@@ -148,6 +148,9 @@ class SwaggerSpec(api.ResourceApi):
 
         paths = collections.OrderedDict()
         for path, operation in self.parent.op_paths():
+            # Cut of first item (will be the parents path)
+            path = path[1:]
+
             # Filter out swagger endpoints
             # if self.SWAGGER_TAG in operation.tags:
             #     continue
@@ -211,7 +214,7 @@ class SwaggerSpec(api.ResourceApi):
 
     @doc.response(HTTPStatus.OK, "HTML content")
     @doc.produces('text/html')
-    def get_ui(self, request):
+    def get_ui(self, _):
         """
         Load the Swagger UI interface
         """
@@ -223,7 +226,7 @@ class SwaggerSpec(api.ResourceApi):
         return api.HttpResponse(self._ui_cache, headers={'ContentType': 'text/html'})
 
     @doc.response(HTTPStatus.OK, "HTML content")
-    def get_static(self, request, file_name=None):
+    def get_static(self, _, file_name=None):
         """
         Get static content for UI.
         """
