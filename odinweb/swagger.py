@@ -7,13 +7,13 @@ from typing import List, Dict, Any
 from odin import fields
 from odin.utils import getmeta, lazy_property
 
-from odinweb import api, doc
-from odinweb import resources
-from odinweb._compat import *
-from odinweb.constants import *
-from odinweb.data_structures import PathNode, UrlPath
-from odinweb.decorators import Operation
-from odinweb.utils import dict_filter
+from . import api, doc
+from . import resources
+from ._compat import *
+from .constants import *
+from .data_structures import PathNode, UrlPath
+from .decorators import Operation
+from .utils import dict_filter
 
 DATA_TYPE_MAP = {
     'int': Type.Integer,
