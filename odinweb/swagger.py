@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-import itertools
 import collections
 import os
+
+from typing import List, Dict, Any
 
 from odin import fields
 from odin.utils import getmeta, lazy_property
@@ -128,16 +129,13 @@ class SwaggerSpec(api.ResourceApi):
 
     @staticmethod
     def generate_parameters(path):
-        parameters = []
-        for node in path:
-            if isinstance(node, api.PathNode):
-                parameters.append({
-                    'name': node.name,
-                    'in': api.In.Path.value,
-                    'type': DATA_TYPE_MAP.get(node.type, Type.String).value,
-                    'required': True
-                })
-        return parameters
+        # type: (UrlPath) -> List[Dict[str, Any]]
+        return [{
+            'name': node.name,
+            'in': api.In.Path.value,
+            'type': DATA_TYPE_MAP.get(node.type, Type.String).value,
+            'required': True
+        } for node in path.nodes]
 
     def parse_operations(self):
         """
@@ -160,9 +158,9 @@ class SwaggerSpec(api.ResourceApi):
 
             # Add path parameters
             path_spec = paths.setdefault(str(path), {})
-            # parameters = self.generate_parameters(api_route_path)
-            # if parameters:
-            #     path_spec['parameters'] = parameters
+            parameters = self.generate_parameters(path)
+            if parameters:
+                path_spec['parameters'] = parameters
 
             # Add methods
             for method in operation.methods:
