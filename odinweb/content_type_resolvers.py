@@ -14,25 +14,18 @@ def accepts_header():
     """
     Resolve content type from the accepts header.
     """
-    def inner(request):
+    def resolver(request):
         return request.headers.get('accepts')
-    return inner
+    return resolver
 
 
 def content_type_header():
     """
     Resolve content type from the content-type header.
     """
-    def inner(request):
+    def resolver(request):
         return request.headers.get('content-type')
-    return inner
-
-
-class DefaultString(str):
-    """
-    Wrapper around a string to mark it as a default string.
-    """
-    is_default = True
+    return resolver
 
 
 def specific_default(content_type):
@@ -42,7 +35,7 @@ def specific_default(content_type):
     :param content_type: The content type to use.
 
     """
-    def inner(_):
-        return DefaultString(content_type)
-    return inner
+    def resolver(_):
+        return content_type
+    return resolver
 
