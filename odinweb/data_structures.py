@@ -67,7 +67,7 @@ class UrlPath(object):
         """
         if isinstance(obj, UrlPath):
             return obj
-        if isinstance(obj, _compat.text_type):
+        if isinstance(obj, _compat.string_types):
             return UrlPath.parse(obj)
         if isinstance(obj, PathNode):
             return UrlPath(obj)
