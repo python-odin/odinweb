@@ -146,6 +146,13 @@ class UrlPath(object):
             return "{{{}:{}}}".format(path_node.name, path_node.type.value)
         return "{{{}}}".format(path_node.name)
 
+    @property
+    def nodes(self):
+        """
+        Return iterator of PathNode items
+        """
+        return (n for n in self._nodes if isinstance(n, PathNode))
+
     def format(self, node_formatter=None):
         # type: (Optional[Callable[[PathNode], str]]) -> str
         """
