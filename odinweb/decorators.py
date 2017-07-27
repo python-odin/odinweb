@@ -8,26 +8,25 @@ A collection of decorators for identifying the various types of route.
 from __future__ import absolute_import
 
 from collections import defaultdict
-from functools import wraps
 from typing import Callable, Union, Tuple, Type, Dict, Any, Optional, Generator, List
 
 from odin import Resource
 from odin.exceptions import CodecDecodeError
 from odin.utils import force_tuple, lazy_property, getmeta
 
+from . import doc
 from .constants import *
 from .data_structures import NoPath, UrlPath, HttpResponse
-from .doc import OperationDoc
 from .exceptions import HttpError
 from .resources import Listing
-from .utils import to_bool, dict_filter, dict_filter_update
+from .utils import to_bool, dict_filter
 
 __all__ = (
-    'Operation', 'ListOperation',
+    'Operation',
     # Basic routes
-    'route', 'collection', 'collection_action', # 'resource_route', 'resource_action',
+    'collection', 'collection_action',  # 'resource_route', 'resource_action',
     # Shortcuts
-    'listing', 'create', 'detail', 'update', 'patch', 'delete', 'action', #'detail_action',
+    'listing', 'create', 'detail', 'update', 'patch', 'delete', 'action',  #'detail_action',
 )
 
 # Type definitions
@@ -62,8 +61,8 @@ class Operation(object):
             return instance
         return inner(func) if func else inner
 
-    def __init__(self, callback, url_path=NoPath, methods=Method.GET, resource=None, tags=None):
-        # type: (Callable, UrlPath, Union(Method, Tuple[Method]), Type[Resource], Tags) -> None
+    def __init__(self, callback, url_path=NoPath, methods=Method.GET, resource=None, tags=None, summary=None):
+        # type: (Callable, UrlPath, Union(Method, Tuple[Method]), Type[Resource], Tags, Optional(str)) -> None
         """
         :param callback: Function we are routing
         :param url_path: A sub path that can be used as a action.
@@ -90,27 +89,30 @@ class Operation(object):
 
         # Documentation
         self.deprecated = False
-        self.summary = None
+        self.summary = summary
         self.consumes = set()
         self.produces = set()
-        # Copy defaults
-        for attr in ('deprecated', 'summary', 'consumes', 'produces'):
+        self.responses = {}
+        self._parameters = defaultdict(lambda: defaultdict(dict))
+        self._tags = set(force_tuple(tags))
+
+        # Copy values from callback (if defined)
+        for attr in ('deprecated', 'consumes', 'produces', 'responses', '_parameters'):
             value = getattr(callback, attr, None)
             if value is not None:
                 setattr(self, attr, value)
 
-        self.responses = {
-            'default': {
-                'description': 'Error',
-                'schema': {'$ref': '#/definitions/Error'}
-            }
-        }
-        self._parameters = defaultdict(lambda: defaultdict(dict))
-        self._tags = set(force_tuple(tags))
+        # Add a default response
+        self.responses.setdefault('default', {
+            'description': 'Error',
+            'schema': {'$ref': '#/definitions/Error'}
+        })
 
     def __call__(self, request, path_args):
         # type: (HttpRequest, Dict[Any]) -> Any
-
+        """
+        Main wrapper around the operation callback function.
+        """
         # Allow for a pre_dispatch hook, path_args is passed by ref so changes can be made.
         if self._pre_dispatch:
             self._pre_dispatch(request, path_args)
@@ -125,16 +127,23 @@ class Operation(object):
 
     def execute(self, request, *args, **path_args):
         # type: (HttpRequest, tuple, Dict[Any]) -> Any
-        if self.binding:
+        """
+        Execute the callback (binding callback if required)
+        """
+        binding = self.binding
+        if binding:
             # Provide binding as decorators are executed prior to binding
-            return self.callback(self.binding, request, *args, **path_args)
+            return self.callback(binding, request, *args, **path_args)
         else:
             return self.callback(request, *args, **path_args)
 
     def bind_to_instance(self, instance):
+        """
+        Bind a ResourceApi instance to an operation.
+        """
         self.binding = instance
 
-        # Configure pre-bindings
+        # Configure hooks
         if self._pre_dispatch is None:
             self._pre_dispatch = getattr(instance, 'pre_dispatch', None)
         if self._post_dispatch is None:
@@ -203,12 +212,15 @@ class Operation(object):
         """
         return bool(self.binding)
 
-    # Docs ##########################################################
+    # Docs ####################################################################
 
     def to_doc(self):
+        """
+        Generate a dictionary for documentation generation.
+        """
         return dict_filter(
             operationId=self.operation_id,
-            description=self.description,
+            description=(self.callback.__doc__ or '').strip(),
             summary=self.summary,
             tags=self.tags if self.tags else None,
             deprecated=True if self.deprecated else None,
@@ -217,10 +229,6 @@ class Operation(object):
             produces=list(self.produces) if self.produces else None,
             responses=self.responses if self.responses else None,
         )
-
-    @property
-    def description(self):
-        return (self.callback.__doc__ or '').strip()
 
     @lazy_property
     def operation_id(self):
@@ -235,12 +243,17 @@ class Operation(object):
         tags = []
         if self._tags:
             tags.extend(self._tags)
-        if self.binding and self.binding.tags:
-            tags.extend(self.binding.tags)
+        if self.binding:
+            binding_tags = getattr(self.binding, 'tags', None)
+            if binding_tags:
+                tags.extend(binding_tags)
         return tags
 
     @property
     def parameters(self):
+        """
+        Build parameter definition
+        """
         results = []
 
         for param_type in (In.Path, In.Header, In.Query, In.Form):
@@ -256,59 +269,7 @@ class Operation(object):
 
         return results or None
 
-    # Params ########################################################
-
-    def add_param(self, name, in_, **options):
-        # type: (name, In, **Any) -> None
-        """
-        Add parameter, you should probably use on of :meth:`path_param`, :meth:`query_param`,
-        :meth:`body_param`, or :meth:`header_param`.
-        """
-        dict_filter_update(self._parameters[in_][name], options)
-
-    def path_param(self, name, type_, description=None,
-                   default=None, minimum=None, maximum=None, enum_=None, **options):
-        """
-        Add Path parameter
-        """
-        self.add_param(
-            name, In.Path, type=type_.value, description=description,
-            default=default, minimum=minimum, maximum=maximum, enum=enum_,
-            **options
-        )
-
-    def query_param(self, name, type_, description=None, required=False,
-                    default=None, minimum=None, maximum=None, enum_=None, **options):
-        """
-        Add Query parameter
-        """
-        self.add_param(
-            name, In.Query, type=type_.value, description=description,
-            required=required or None, default=default, minimum=minimum, maximum=maximum, enum=enum_,
-            **options
-        )
-
-    def body_param(self, description=None, default=None, **options):
-        """
-        Set the body param
-        """
-        self._parameters[In.Body] = dict_filter(
-            {'name': 'body', 'in': In.Body.value, 'description': description, 'default': default},
-            options
-        )
-
-    def header_param(self, name, type_, description=None, default=None, required=False, **options):
-        """
-        Add a header parameter
-        """
-        self.add_param(
-            name, In.Header, type=type_.value, description=description, required=required or None,
-            default=default,
-            **options
-        )
-
-
-collection = collection_action = action = route = Operation
+collection = collection_action = action = Operation
 
 
 class ListOperation(Operation):
@@ -324,13 +285,6 @@ class ListOperation(Operation):
             def list_items(self, request, offset, limit):
                 ...
                 return items
-
-    :param f: Function we are routing
-    :param resource: Specify the resource that this function
-        encodes/decodes, default is the one specified on the ResourceAPI
-        instance.
-    :param default_offset: Default value for the offset from the start of listing.
-    :param default_limit: Default value for limiting the response size.
 
     """
     listing_resource = Listing
@@ -353,6 +307,10 @@ class ListOperation(Operation):
         if max_limit is not None:
             self.max_limit = max_limit
 
+        # Apply documentation
+        doc.query_param('offset', Type.Integer, obj=self, description="Offset to start listing from.",
+                        default=self.default_offset, maximum=self.max_offset)
+
     def execute(self, request, *args, **path_args):
         # Get paging args from query string
         max_offset = self.max_offset
@@ -373,6 +331,7 @@ class ListOperation(Operation):
 
         bare = to_bool(request.GET.get('bare', False))
 
+        # Run base execute
         result = super(ListOperation, self).execute(request, *args, **path_args)
         if result is not None:
             if isinstance(result, tuple) and len(result) == 2:
@@ -395,28 +354,15 @@ class ResourceOperation(Operation):
     def __init__(self, *args, **kwargs):
         super(ResourceOperation, self).__init__(*args, **kwargs)
 
+        # Apply documentation
+        doc.body(obj=self)
+
     def execute(self, request, *args, **path_args):
         item = self.get_resource(request) if self.resource else None
         return super(ResourceOperation, self).execute(request, item, *args, **path_args)
 
 
-def resource_request(func=None):
-    """
-    Handle processing a request with a resource body. 
-    
-    It is assumed decorator will operate on a class method.
-    """
-    def inner(f):
-        OperationDoc.bind(f).body_param()
-
-        @wraps(f)
-        def wrapper(self, request, *args, **kwargs):
-            item = self.get_resource(request, resource=f.resource)
-            return f(self, request, item, *args, **kwargs)
-
-        return wrapper
-
-    return inner(func) if func else inner
+resource_request = ResourceOperation
 
 
 # Shortcut methods
