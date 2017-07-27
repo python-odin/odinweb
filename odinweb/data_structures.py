@@ -120,6 +120,10 @@ class UrlPath(object):
             return self._nodes == other._nodes
         return NotImplemented
 
+    def __getitem__(self, item):
+        # type: (Union[int, slice]) -> UrlPath
+        return UrlPath(*self._nodes[item])
+
     @property
     def is_absolute(self):
         # type: () -> bool
