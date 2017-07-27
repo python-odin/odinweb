@@ -171,7 +171,7 @@ class SwaggerSpec(api.ResourceApi):
         return paths, resource_defs
 
     @api.Operation
-    # @doc.response(200, "Swagger JSON of this API")
+    @doc.response(HTTPStatus.OK, "Swagger JSON of this API")
     def get_swagger(self, request):
         """
         Generate this document.
@@ -211,8 +211,8 @@ class SwaggerSpec(api.ResourceApi):
         except OSError:
             raise api.HttpError(404, 40401, "Not found")
 
-    # @doc.response(200, "HTML content")
-    # @doc.produces('text/html')
+    @doc.response(HTTPStatus.OK, "HTML content")
+    @doc.produces('text/html')
     def get_ui(self, request):
         """
         Load the Swagger UI interface
@@ -224,7 +224,7 @@ class SwaggerSpec(api.ResourceApi):
             self._ui_cache = content.replace(u"{{SWAGGER_PATH}}", str(self.swagger_path))
         return api.HttpResponse(self._ui_cache, headers={'ContentType': 'text/html'})
 
-    # @doc.response(200, "HTML content")
+    @doc.response(HTTPStatus.OK, "HTML content")
     def get_static(self, request, file_name=None):
         """
         Get static content for UI.
