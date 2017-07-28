@@ -89,11 +89,12 @@ class ResourceApiMeta(type):
 
         # Get routes from parent objects
         for parent in parents:
-            if hasattr(parent, '_operations'):
-                operations.extend(parent._operations)
+            parent_ops = getattr(parent, '_operations', None)
+            if parent_ops:
+                operations.extend(parent_ops)
 
         new_class = super_new(mcs, name, bases, attrs)
-        new_class._operations = sorted(operations, key=hash)
+        setattr(new_class, '_operations', sorted(operations, key=lambda o: o.sort_key))
 
         return new_class
 
