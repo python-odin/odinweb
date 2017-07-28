@@ -5,14 +5,12 @@ Documentation Decorators
 Additional decorators for improving documentation of APIs.
 
 """
-from collections import defaultdict
-from typing import Any
-
 from odin.utils import getmeta
 
 from . import _compat
 from .constants import In, HTTPStatus
-from .utils import dict_filter_update, dict_filter
+from .data_structures import Param
+from .utils import dict_filter, make_decorator
 
 __all__ = (
     'deprecated',
@@ -21,32 +19,25 @@ __all__ = (
 )
 
 
-def deprecated(operation=None):
+@make_decorator
+def deprecated(operation):
     """
     Mark an operation deprecated.
     """
-    def inner(func):
-        func.deprecated = True
-        return func
-    return inner(operation) if operation else inner
+    operation.deprecated = True
 
 
-def _add_param(name, in_, obj=None, **options):
-    # type: (name, In, **Any) -> None
+@make_decorator
+def add_param(operation, param):
+    # type: (Param) -> None
     """
     Add parameter, you should probably use on of :meth:`path_param`, :meth:`query_param`,
     :meth:`body_param`, or :meth:`header_param`.
     """
-    def inner(func):
-        data = getattr(func, '_parameters', None)
-        if not data:
-            data = defaultdict(lambda: defaultdict(dict))
-            setattr(func, '_parameters', data)
-
-        dict_filter_update(data[in_][name], options)
-
-        return func
-    return inner(obj) if obj else inner
+    try:
+        getattr(operation, 'parameters').append(param)
+    except AttributeError:
+        setattr(operation, 'parameters', {param})
 
 
 def query_param(name, type, description=None, required=False, default=None,
