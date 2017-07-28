@@ -7,13 +7,12 @@ A collection of decorators for identifying the various types of route.
 """
 from __future__ import absolute_import
 
-from typing import Callable, Union, Tuple, Type, Dict, Any, Optional, Generator, List
+from typing import Callable, Union, Tuple, Type, Dict, Any, Optional, Generator, List  # noqa
 
-from odin import Resource
 from odin.exceptions import CodecDecodeError
 from odin.utils import force_tuple, lazy_property
 
-from .constants import *
+from .constants import HTTPStatus, Method
 from .data_structures import NoPath, UrlPath, HttpResponse, PathNode, Param
 from .exceptions import HttpError
 from .resources import Listing

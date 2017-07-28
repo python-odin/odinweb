@@ -40,43 +40,36 @@ def add_param(operation, param):
         setattr(operation, 'parameters', {param})
 
 
-def query_param(name, type, description=None, required=False, default=None,
-                minimum=None, maximum=None, enum=None, **options):
+def query_param(*args, **kwargs):
     """
     Query parameter documentation.
     """
-    return _add_param(name, In.Query, type=type, description=description,
-                      minimum=minimum, maximum=maximum, enum=enum,
-                      required=required, default=default, **options)
+    return add_param(Param.query(*args, **kwargs))
 
 
-def path_param(name, type, description=None, default=None, minimum=None,
-               maximum=None, enum=None, **options):
+def path_param(*args, **kwargs):
     """
     Path parameter documentation.
     """
-    return _add_param(name, In.Path, type=type, description=description,
-                      minimum=minimum, maximum=maximum, enum=enum,
-                      default=default, **options)
+    return add_param(Param.path(*args, **kwargs))
 
 
-def body(description=None, default=None, **options):
+def body(*args, **kwargs):
     """
     Body parameter documentation. 
     """
-    return _add_param('body', In.Body, description=description,
-                      default=default, **options)
+    return add_param(Param.body(*args, **kwargs))
 
 
-def header_param(name, type, description=None, default=None, required=False, **options):
+def header_param(*args, **kwargs):
     """
     Header parameter documentation. 
     """
-    return _add_param(name, In.Header, type=type, description=description,
-                      required=required, default=default, **options)
+    return add_param(Param.header(*args, **kwargs))
 
 
-def response(status, description, resource=None):
+@make_decorator
+def response(operation, status, description, resource=None):
     """
     Define an expected responses.
 
@@ -86,35 +79,28 @@ def response(status, description, resource=None):
     if isinstance(status, HTTPStatus):
         status = status.value
 
-    def inner(func):
-        data = getattr(func, 'responses', None)
-        if not data:
-            data = {}
-            setattr(func, 'responses', data)
+    data = getattr(operation, 'responses', None)
+    if not data:
+        data = {}
+        setattr(operation, 'responses', data)
 
-        data[status] = dict_filter(
-            description=description,
-            schema={'$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)} if resource else None
-        )
-
-        return func
-    return inner
+    data[status] = dict_filter(
+        description=description,
+        schema={'$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)} if resource else None
+    )
 
 
-def produces(*content_types):
+@make_decorator
+def produces(operation, *content_types):
     """
     Define content types produced by an endpoint.
     """
     if not all(isinstance(content_type, _compat.string_types) for content_type in content_types):
         raise ValueError("In parameter not a valid value.")
 
-    def inner(func):
-        data = getattr(func, 'produces', None)
-        if not data:
-            data = set()
-            setattr(func, 'produces', data)
+    data = getattr(operation, 'produces', None)
+    if not data:
+        data = set()
+        setattr(operation, 'produces', data)
 
-        data.update(content_types)
-
-        return func
-    return inner
+    data.update(content_types)

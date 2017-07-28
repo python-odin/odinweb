@@ -2,15 +2,15 @@
 import collections
 import os
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any  # noqa
 
 from odin import fields
 from odin.utils import getmeta, lazy_property
 
 from . import api, doc
 from . import resources
-from ._compat import *
-from .constants import *
+from ._compat import binary_type
+from .constants import HTTPStatus, Method, Type
 from .data_structures import PathNode, UrlPath, Param
 from .decorators import Operation
 from .utils import dict_filter

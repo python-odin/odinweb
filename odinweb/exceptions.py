@@ -4,8 +4,8 @@ Exceptions
 ~~~~~~~~~~
 
 """
-from odinweb.resources import Error
-from .constants import *
+from .constants import HTTPStatus
+from .resources import Error
 
 
 class ImmediateHttpResponse(Exception):

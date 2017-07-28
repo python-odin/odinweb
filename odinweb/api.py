@@ -7,7 +7,7 @@ from __future__ import absolute_import, unicode_literals
 
 import logging
 
-from typing import Callable, Union, Tuple, List, Any, Optional, Generator
+from typing import Callable, Union, Tuple, List, Any, Optional, Generator  # noqa
 
 from odin import Resource
 from odin.codecs import json_codec
@@ -17,7 +17,6 @@ from odin.utils import getmeta
 from . import _compat
 from . import content_type_resolvers
 from .data_structures import UrlPath, NoPath, HttpResponse
-from .resources import Error
 from .utils import parse_content_type
 
 # Import all to simplify end user API.
@@ -84,7 +83,7 @@ class ResourceApiMeta(type):
 
         # Get operations
         operations = []
-        for view, obj in attrs.items():
+        for obj in attrs.values():
             if isinstance(obj, Operation):
                 operations.append(obj)
 

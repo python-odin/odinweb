@@ -1,10 +1,10 @@
 from collections import namedtuple
-from typing import Dict, Union, Optional, Callable, Any, AnyStr
+from typing import Dict, Union, Optional, Callable, Any, AnyStr  # noqa
 
 from odin.utils import getmeta
 
 from . import _compat
-from .constants import *
+from .constants import HTTPStatus, In, Type
 from .utils import dict_filter
 
 
@@ -15,7 +15,7 @@ class DefaultResource(object):
     The default resource is then obtained from the bound object.
 
     """
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls):
         return DefaultResource
 
 
@@ -185,32 +185,32 @@ class Param(object):
     __slots__ = ('name', 'in_', 'type', 'resource', 'description', 'options')
 
     @classmethod
-    def path(cls, name, type=Type.String, description=None, default=None,
+    def path(cls, name, type_=Type.String, description=None, default=None,
              minimum=None, maximum=None, enum=None, **options):
         """
         Define a path parameter
         """
-        return cls(name, In.Path, type, None, description,
+        return cls(name, In.Path, type_, None, description,
                    default=default, minimum=minimum, maximum=maximum,
                    enum=enum, **options)
 
     @classmethod
-    def query(cls, name, type=Type.String, description=None, required=False, default=None,
+    def query(cls, name, type_=Type.String, description=None, required=False, default=None,
               minimum=None, maximum=None, enum=None, **options):
         """
         Define a query parameter
         """
-        return cls(name, In.Query, type, None, description,
+        return cls(name, In.Query, type_, None, description,
                    required=required, default=default,
                    minimum=minimum, maximum=maximum,
                    enum=enum, **options)
 
     @classmethod
-    def header(cls, name, type=Type.String, description=None, default=None, required=False, **options):
+    def header(cls, name, type_=Type.String, description=None, default=None, required=False, **options):
         """
         Define a header parameter.
         """
-        return cls(name, In.Header, type, None, description,
+        return cls(name, In.Header, type_, None, description,
                    required=required, default=default,
                    **options)
 
@@ -223,21 +223,21 @@ class Param(object):
                    default=default, **options)
 
     @classmethod
-    def form(cls, name, type=Type.String, description=None, required=False, default=None,
+    def form(cls, name, type_=Type.String, description=None, required=False, default=None,
              minimum=None, maximum=None, enum=None, **options):
         """
         Define form parameter.
         """
-        return cls(name, In.Form, type, None, description,
+        return cls(name, In.Form, type_, None, description,
                    required=required, default=default,
                    minimum=minimum, maximum=maximum,
                    enum=enum, **options)
 
-    def __init__(self, name, in_, type=None, resource=None, description=None, **options):
+    def __init__(self, name, in_, type_=None, resource=None, description=None, **options):
         # type: (str, In, Optional[Type] **Dict[str, Any]) -> None
         self.name = name
         self.in_ = in_
-        self.type = type
+        self.type = type_
         self.resource = resource
         self.description = description
         self.options = dict_filter(**options)
