@@ -175,7 +175,7 @@ class Operation(object):
             raise HttpError(HTTPStatus.BAD_REQUEST, 40099, "Unable to decode request body.", str(ude))
 
         try:
-            resource = request.request_codec.loads(body, resource=self.resource, full_clean=False)
+            resource = request.request_codec.loads(body, resource=self.resource, full_clean=True)
 
         except ValueError as ve:
             raise HttpError(HTTPStatus.BAD_REQUEST, 40098, "Unable to load resource.", str(ve))
