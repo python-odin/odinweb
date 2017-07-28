@@ -8,8 +8,8 @@ from __future__ import absolute_import, unicode_literals
 import logging
 
 from typing import Callable, Union, Tuple, List, Any, Optional, Generator  # noqa
+from odin import Resource  # noqa
 
-from odin import Resource
 from odin.codecs import json_codec
 from odin.exceptions import ValidationError
 from odin.utils import getmeta
@@ -322,7 +322,7 @@ class ApiInterfaceBase(ApiContainer):
         if request.method not in operation.methods:
             return HttpResponse.from_status(
                 HTTPStatus.METHOD_NOT_ALLOWED,
-                {'Allow', ','.join(m.value for m in operation.methods)}
+                {'Allow': ','.join(m.value for m in operation.methods)}
             )
 
         # Response types

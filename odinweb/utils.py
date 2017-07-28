@@ -12,7 +12,7 @@ import base64
 import itertools
 from functools import wraps
 
-from typing import Any
+from typing import Any  # noqa
 
 from . import _compat
 

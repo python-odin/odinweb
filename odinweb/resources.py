@@ -11,7 +11,7 @@ import odin
 from typing import AnyStr  # noqa
 from odin.fields import Field
 
-from .constants import HTTPStatus
+from .constants import HTTPStatus  # noqa
 
 
 class AnyField(Field):
