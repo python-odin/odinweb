@@ -7,16 +7,17 @@ A collection of decorators for identifying the various types of route.
 """
 from __future__ import absolute_import
 
-from typing import Callable, Union, Tuple, Type, Dict, Any, Optional, Generator, List  # noqa
+from typing import Callable, Union, Tuple, Dict, Any, Optional, Generator, List  # noqa
 
+from odin import Resource
 from odin.exceptions import CodecDecodeError
 from odin.utils import force_tuple, lazy_property
 
-from .constants import HTTPStatus, Method
-from .data_structures import NoPath, UrlPath, HttpResponse, PathNode, Param
+from .constants import HTTPStatus, Method, Type
+from .data_structures import NoPath, UrlPath, HttpResponse, PathNode, Param, Response
 from .exceptions import HttpError
-from .resources import Listing
-from .utils import to_bool, dict_filter
+from .resources import Listing, Error
+from .utils import to_bool, dict_filter, make_decorator
 
 __all__ = (
     'Operation',
@@ -59,7 +60,7 @@ class Operation(object):
         return inner(func) if func else inner
 
     def __init__(self, callback, url_path=NoPath, methods=Method.GET, resource=None, tags=None, summary=None):
-        # type: (Callable, UrlPath, Union(Method, Tuple[Method]), Optional[Type[Resource]], Tags, Optional(str)) -> None
+        # type: (Callable, UrlPath, Union(Method, Tuple[Method]), Optional[Resource], Tags, Optional(str)) -> None
         """
         :param callback: Function we are routing
         :param url_path: A sub path that can be used as a action.
@@ -89,7 +90,7 @@ class Operation(object):
         self.summary = summary
         self.consumes = set()
         self.produces = set()
-        self.responses = {}
+        self.responses = set()
         self.parameters = set()
         self._tags = set(force_tuple(tags))
 
@@ -100,10 +101,7 @@ class Operation(object):
                 setattr(self, attr, value)
 
         # Add a default response
-        self.responses.setdefault('default', {
-            'description': 'Error',
-            'schema': {'$ref': '#/definitions/Error'}
-        })
+        self.responses.add(Response('default', 'Error', Error))
 
     def __call__(self, request, path_args):
         # type: (HttpRequest, Dict[Any]) -> Any
@@ -224,7 +222,7 @@ class Operation(object):
             consumes=self.consumes if self.consumes else None,
             parameters=[param.to_swagger(self.resource) for param in self.parameters],
             produces=list(self.produces) if self.produces else None,
-            responses=self.responses if self.responses else None,
+            responses=dict(resp.to_swagger(self.resource) for resp in self.responses) if self.responses else None,
         )
 
     @lazy_property
@@ -246,7 +244,7 @@ class Operation(object):
                 tags.extend(binding_tags)
         return tags
 
-collection = collection_action = action = Operation
+collection = collection_action = action = operation = Operation
 
 
 class ListOperation(Operation):
@@ -336,7 +334,8 @@ class ResourceOperation(Operation):
 
 # Shortcut methods
 
-def listing(callback=None, resource=None, default_limit=50, max_limit=None, tags=None, summary="List resources"):
+@make_decorator
+def listing(callback, resource=None, default_limit=50, max_limit=None, tags=None, summary="List resources"):
     """
     Decorator to configure an operation that returns a list of resources.
 
@@ -349,15 +348,14 @@ def listing(callback=None, resource=None, default_limit=50, max_limit=None, tags
     :param summary: Summary of the operation.
 
     """
-    return ListOperation(callback, NoPath, Method.GET, resource, tags, summary,
-                         default_limit=default_limit, max_limit=max_limit)
-    # OperationDoc.bind(func).add_response(HTTPStatus.OK, "List of resources", Listing)
-    # OperationDoc.bind(func).query_param('offset', Type.Integer, "Offset of results")
-    # OperationDoc.bind(func).query_param('limit', Type.Integer, "Limit on number of items")
-    # OperationDoc.bind(func).query_param('bare', Type.Boolean, "Plain list of resources without Listing container")
+    op = ListOperation(callback, NoPath, Method.GET, resource, tags, summary,
+                       default_limit=default_limit, max_limit=max_limit)
+    op.responses.add(Response(HTTPStatus.OK, "Listing of resources", Listing))
+    return op
 
 
-def create(callback=None, resource=None, tags=None, summary="Create a new resource"):
+@make_decorator
+def create(callback, resource=None, tags=None, summary="Create a new resource"):
     """
     Decorator to configure an operation that creates a resource.
 
@@ -368,11 +366,13 @@ def create(callback=None, resource=None, tags=None, summary="Create a new resour
     :param summary: Summary of the operation.
 
     """
-    return ResourceOperation(callback, NoPath, Method.POST, resource, tags, summary)
-    # doc.response(HTTPStatus.CREATED, "Resource has been created", resource)
+    op = ResourceOperation(callback, NoPath, Method.POST, resource, tags, summary)
+    op.responses.add(Response(HTTPStatus.CREATED, "{name} has been created"))
+    return op
 
 
-def detail(callback=None, resource=None, tags=None, summary="Get specified resource."):
+@make_decorator
+def detail(callback, resource=None, tags=None, summary="Get specified resource."):
     """
     Decorator to configure an operation that fetches a resource.
 
@@ -383,11 +383,13 @@ def detail(callback=None, resource=None, tags=None, summary="Get specified resou
     :param summary: Summary of the operation.
 
     """
-    return Operation(callback, PathNode('resource_id'), Method.GET, resource, tags, summary)
-    # OperationDoc.bind(func).add_response(HTTPStatus.OK, "Get a resource", resource)
+    op = Operation(callback, PathNode('resource_id'), Method.GET, resource, tags, summary)
+    op.responses.add(Response(HTTPStatus.OK, "Get a {name}"))
+    return op
 
 
-def update(callback=None, resource=None, tags=None, summary="Update specified resource."):
+@make_decorator
+def update(callback, resource=None, tags=None, summary="Update specified resource."):
     """
     Decorator to configure an operation that updates a resource.
 
@@ -398,11 +400,13 @@ def update(callback=None, resource=None, tags=None, summary="Update specified re
     :param summary: Summary of the operation.
 
     """
-    return ResourceOperation(callback, PathNode('resource_id'), Method.PUT, resource, tags, summary)
-    # OperationDoc.bind(func).add_response(HTTPStatus.OK, "Resource has been updated.", resource)
+    op = ResourceOperation(callback, PathNode('resource_id'), Method.PUT, resource, tags, summary)
+    op.responses.add(Response(HTTPStatus.NO_CONTENT, "{name} has been updated."))
+    return op
 
 
-def patch(callback=None, resource=None, tags=None, summary="Patch specified resource."):
+@make_decorator
+def patch(callback, resource=None, tags=None, summary="Patch specified resource."):
     """
     Decorator to configure an operation that patches a resource.
 
@@ -413,11 +417,13 @@ def patch(callback=None, resource=None, tags=None, summary="Patch specified reso
     :param summary: Summary of the operation.
 
     """
-    return ResourceOperation(callback, PathNode('resource_id'), Method.PATCH, resource, tags, summary)
-    # OperationDoc.bind(func).add_response(HTTPStatus.OK, "Resource has been patched.", resource)
+    op = ResourceOperation(callback, PathNode('resource_id'), Method.PATCH, resource, tags, summary)
+    op.responses.add(Response(HTTPStatus.OK, "{name} has been patched."))
+    return op
 
 
-def delete(callback=None, tags=None, summary="Delete specified resource."):
+@make_decorator
+def delete(callback, tags=None, summary="Delete specified resource."):
     """
     Decorator to configure an operation that deletes resource.
 
@@ -426,5 +432,6 @@ def delete(callback=None, tags=None, summary="Delete specified resource."):
     :param summary: Summary of the operation.
 
     """
-    return Operation(callback, PathNode('resource_id'), Method.DELETE, None, tags, summary)
-    # OperationDoc.bind(func).add_response(HTTPStatus.NO_CONTENT, "Resource has been deleted.")
+    op = Operation(callback, PathNode('resource_id'), Method.DELETE, None, tags, summary)
+    op.responses.add(Response(HTTPStatus.NO_CONTENT, "{name} has been deleted.", None))
+    return op
