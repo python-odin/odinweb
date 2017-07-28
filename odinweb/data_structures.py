@@ -1,8 +1,22 @@
 from collections import namedtuple
 from typing import Dict, Union, Optional, Callable, Any, AnyStr
 
+from odin.utils import getmeta
+
 from . import _compat
 from .constants import *
+from .utils import dict_filter
+
+
+class DefaultResource(object):
+    """
+    A helper object that indicates that the default resource should be used.
+
+    The default resource is then obtained from the bound object.
+
+    """
+    def __new__(cls, *args, **kwargs):
+        return DefaultResource
 
 
 class HttpResponse(object):
@@ -133,14 +147,6 @@ class UrlPath(object):
         return len(self._nodes) and self._nodes[0] == ''
 
     @staticmethod
-    def swagger_node_formatter(path_node):
-        # type: (PathNode) -> str
-        """
-        Format a node for swagger spec (default formatter for the format method).
-        """
-        return "{{{}}}".format(path_node.name)
-
-    @staticmethod
     def odinweb_node_formatter(path_node):
         # type: (PathNode) -> str
         """
@@ -170,3 +176,101 @@ class UrlPath(object):
         return '/'.join(node_formatter(n) if isinstance(n, PathNode) else n for n in self._nodes)
 
 NoPath = UrlPath()
+
+
+class Param(object):
+    """
+    Represents a generic parameter object.
+    """
+    __slots__ = ('name', 'in_', 'type', 'resource', 'description', 'options')
+
+    @classmethod
+    def path(cls, name, type=Type.String, description=None, default=None,
+             minimum=None, maximum=None, enum=None, **options):
+        """
+        Define a path parameter
+        """
+        return cls(name, In.Path, type, None, description,
+                   default=default, minimum=minimum, maximum=maximum,
+                   enum=enum, **options)
+
+    @classmethod
+    def query(cls, name, type=Type.String, description=None, required=False, default=None,
+              minimum=None, maximum=None, enum=None, **options):
+        """
+        Define a query parameter
+        """
+        return cls(name, In.Query, type, None, description,
+                   required=required, default=default,
+                   minimum=minimum, maximum=maximum,
+                   enum=enum, **options)
+
+    @classmethod
+    def header(cls, name, type=Type.String, description=None, default=None, required=False, **options):
+        """
+        Define a header parameter.
+        """
+        return cls(name, In.Header, type, None, description,
+                   required=required, default=default,
+                   **options)
+
+    @classmethod
+    def body(cls, description=None, default=None, resource=DefaultResource, **options):
+        """
+        Define body parameter.
+        """
+        return cls('body', In.Body, None, resource, description,
+                   default=default, **options)
+
+    @classmethod
+    def form(cls, name, type=Type.String, description=None, required=False, default=None,
+             minimum=None, maximum=None, enum=None, **options):
+        """
+        Define form parameter.
+        """
+        return cls(name, In.Form, type, None, description,
+                   required=required, default=default,
+                   minimum=minimum, maximum=maximum,
+                   enum=enum, **options)
+
+    def __init__(self, name, in_, type=None, resource=None, description=None, **options):
+        # type: (str, In, Optional[Type] **Dict[str, Any]) -> None
+        self.name = name
+        self.in_ = in_
+        self.type = type
+        self.resource = resource
+        self.description = description
+        self.options = dict_filter(**options)
+
+    def __hash__(self):
+        return hash(self.in_.value + self.name)
+
+    def __str__(self):
+        return "{} - {}".format(self.in_.value, self.name)
+
+    def __repr__(self):
+        return "Param({!r}, {!r}, {!r}, {!r}, {!r})".format(self.name, self.in_, self.type, self.resource, self.options)
+
+    def to_swagger(self, bound_resource=None):
+        """
+        Generate a swagger representation.
+        """
+        resource = bound_resource if self.resource is DefaultResource else self.resource
+
+        param_def = dict_filter({
+            'name': self.name,
+            'in': self.in_.value,
+            'type': self.type.value if self.type else None,
+        }, self.options)
+
+        if self.description:
+            param_def['description'] = self.description.format(
+                name=getmeta(resource).name if resource else "UNKNOWN"
+            )
+
+        if resource:
+            param_def['schema'] = {
+                '$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)
+            }
+
+        return param_def
