@@ -10,6 +10,7 @@ from __future__ import absolute_import
 import os
 import base64
 import itertools
+from functools import wraps
 
 from typing import Any
 
@@ -65,7 +66,7 @@ def dict_filter_update(base, updates):
 
 def dict_filter(*args, **kwargs):
     """
-    Merge into a dict with all of the None values removed.
+    Merge all values into a single dict with all None values removed.
     
     :param args: 
     :param kwargs:
@@ -76,3 +77,15 @@ def dict_filter(*args, **kwargs):
     for arg in itertools.chain(args, (kwargs,)):
         dict_filter_update(result, arg)
     return result
+
+
+def make_decorator(decorator):
+    """
+    Convert a function into a decorator.
+    """
+    @wraps(decorator)
+    def wrapper(f=None, **kwargs):
+        def inner(func):
+            return decorator(func, **kwargs) or func
+        return inner(f) if f else inner
+    return wrapper
