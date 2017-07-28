@@ -84,8 +84,12 @@ def make_decorator(decorator):
     Convert a function into a decorator.
     """
     @wraps(decorator)
-    def wrapper(f=None, **kwargs):
+    def wrapper(f=None, *args, **kwargs):
         def inner(func):
-            return decorator(func, **kwargs) or func
+            return decorator(func, *args, **kwargs) or func
+        if not callable(f):
+            a = [f]
+            a.extend(args)
+            args, f = a, None
         return inner(f) if f else inner
     return wrapper
