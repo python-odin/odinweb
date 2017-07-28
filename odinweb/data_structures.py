@@ -1,6 +1,7 @@
 from collections import namedtuple
 from typing import Dict, Union, Optional, Callable, Any, AnyStr  # noqa
 
+from odin import Resource  # noqa
 from odin.utils import getmeta
 
 from . import _compat
@@ -113,7 +114,7 @@ class UrlPath(object):
     def __add__(self, other):
         # type: (Union[UrlPath, str, PathNode]) -> UrlPath
         if isinstance(other, UrlPath):
-            return UrlPath(*_add_nodes(self._nodes, other._nodes))
+            return UrlPath(*_add_nodes(self._nodes, other._nodes))  # pylint:disable=protected-access
         if isinstance(other, _compat.string_types):
             return self + UrlPath.parse(other)
         if isinstance(other, PathNode):
@@ -131,7 +132,7 @@ class UrlPath(object):
     def __eq__(self, other):
         # type: (UrlPath) -> bool
         if isinstance(other, UrlPath):
-            return self._nodes == other._nodes
+            return self._nodes == other._nodes  # pylint:disable=protected-access
         return NotImplemented
 
     def __getitem__(self, item):
@@ -234,7 +235,7 @@ class Param(object):
                    enum=enum, **options)
 
     def __init__(self, name, in_, type_=None, resource=None, description=None, **options):
-        # type: (str, In, Optional[Type] **Dict[str, Any]) -> None
+        # type: (str, In, Optional[Type], Optional(Resource), Optional(str), **Dict[str, Any]) -> None
         self.name = name
         self.in_ = in_
         self.type = type_
@@ -274,3 +275,45 @@ class Param(object):
             }
 
         return param_def
+
+
+class Response(object):
+    """
+    Definition of a response.
+    """
+    __slots__ = ('status', 'description', 'resource')
+
+    def __init__(self, status, description, resource=DefaultResource):
+        # type: (HTTPStatus, str, Optional(Resource)) -> None
+        self.status = status
+        self.description = description
+        self.resource = resource
+
+    def __hash__(self):
+        return hash(self.status)
+
+    def __str__(self):
+        return "{} - {}".format(self.status.value, self.description)
+
+    def __repr__(self):
+        return "Response({!r}, {!r}, {!r})".format(self.status, self.description, self.resource)
+
+    def to_swagger(self, bound_resource=None):
+        """
+        Generate a swagger representation.
+        """
+        resource = bound_resource if self.resource is DefaultResource else self.resource
+
+        response_def = {'description': self.description.format(
+            name=getmeta(resource).name if resource else "UNKNOWN"
+        )}
+
+        if resource:
+            response_def['schema'] = {
+                '$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)
+            }
+
+        if self.status == 'default':
+            return 'default', response_def
+        else:
+            return self.status.value, response_def
