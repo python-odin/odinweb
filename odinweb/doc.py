@@ -5,12 +5,14 @@ Documentation Decorators
 Additional decorators for improving documentation of APIs.
 
 """
-from odin.utils import getmeta
+from typing import Callable, Optional
+
+from odin import Resource
 
 from . import _compat
-from .constants import In, HTTPStatus
-from .data_structures import Param
-from .utils import dict_filter, make_decorator
+from .constants import HTTPStatus
+from .data_structures import Param, Response, DefaultResource
+from .utils import make_decorator
 
 __all__ = (
     'deprecated',
@@ -40,54 +42,21 @@ def add_param(operation, param):
         setattr(operation, 'parameters', {param})
 
 
-def query_param(*args, **kwargs):
-    """
-    Query parameter documentation.
-    """
-    return add_param(Param.query(*args, **kwargs))
-
-
-def path_param(*args, **kwargs):
-    """
-    Path parameter documentation.
-    """
-    return add_param(Param.path(*args, **kwargs))
-
-
-def body(*args, **kwargs):
-    """
-    Body parameter documentation. 
-    """
-    return add_param(Param.body(*args, **kwargs))
-
-
-def header_param(*args, **kwargs):
-    """
-    Header parameter documentation. 
-    """
-    return add_param(Param.header(*args, **kwargs))
-
-
 @make_decorator
-def response(operation, status, description, resource=None):
+def response(operation, status, description, resource=DefaultResource):
+    # type: (Callable, HTTPStatus, str, Optional[Resource]) -> None
     """
     Define an expected responses.
 
     The values are based off `Swagger <https://swagger.io/specification>`_.
 
     """
-    if isinstance(status, HTTPStatus):
-        status = status.value
+    value = Response(status, description, resource)
 
-    data = getattr(operation, 'responses', None)
-    if not data:
-        data = {}
-        setattr(operation, 'responses', data)
-
-    data[status] = dict_filter(
-        description=description,
-        schema={'$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)} if resource else None
-    )
+    try:
+        getattr(operation, 'responses').update(value)
+    except AttributeError:
+        setattr(operation, 'responses', {value})
 
 
 @make_decorator
@@ -98,9 +67,7 @@ def produces(operation, *content_types):
     if not all(isinstance(content_type, _compat.string_types) for content_type in content_types):
         raise ValueError("In parameter not a valid value.")
 
-    data = getattr(operation, 'produces', None)
-    if not data:
-        data = set()
-        setattr(operation, 'produces', data)
-
-    data.update(content_types)
+    try:
+        getattr(operation, 'produces').update(content_types)
+    except AttributeError:
+        setattr(operation, 'parameters', set(content_types))
