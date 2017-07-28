@@ -1,5 +1,9 @@
 import enum
 
+from odin import fields
+
+__all__ = ('HTTPStatus', 'Method', 'PathType', 'In', 'Type')
+
 try:
     from http import HTTPStatus
 except ImportError:
@@ -38,13 +42,21 @@ class In(enum.Enum):
     Form = 'formData'
 
 
-class Type(enum.Enum):
+class Type(str, enum.Enum):
     """
     API Data type definitions
     """
-    String = "string"
-    Number = "number"
-    Integer = "integer"
-    Boolean = "boolean"
-    Array = "array"
-    File = "file"
+    def __new__(cls, value, native_type, odin_field):
+        obj = str.__new__(cls, value)
+        obj._value_ = value
+
+        obj.native_type = native_type
+        obj.odin_field = odin_field
+        return obj
+
+    String = "string", str, fields.StringField
+    Number = "number", float, fields.FloatField
+    Integer = "integer", int, fields.IntegerField
+    Boolean = "boolean", bool, fields.BooleanField
+    # Array = "array", list, fields.ListField
+    # File = "file", str, fields.StringField
