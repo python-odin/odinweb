@@ -281,8 +281,11 @@ class ListOperation(Operation):
         super(ListOperation, self).__init__(*args, **kwargs)
 
         # Apply documentation
-        # doc.query_param('offset', Type.Integer, obj=self, description="Offset to start listing from.",
-        #                 default=self.default_offset, maximum=self.max_offset)
+        self.parameters.add(Param.query('offset', Type.Integer, "Offset to start listing from.",
+                                        default=self.default_offset, maximum=self.max_offset))
+        self.parameters.add(Param.query('limit', Type.Integer, "Limit on the number of listings returned.",
+                                        default=self.default_limit, maximum=self.max_limit))
+        self.parameters.add(Param.query('bare', Type.Boolean, "Return a plain list of objects."))
 
     def execute(self, request, *args, **path_args):
         # Get paging args from query string
