@@ -11,26 +11,12 @@ from . import api, doc
 from . import resources
 from ._compat import *
 from .constants import *
-from .data_structures import PathNode, UrlPath
+from .data_structures import PathNode, UrlPath, Param
 from .decorators import Operation
 from .utils import dict_filter
 
-DATA_TYPE_MAP = {
-    'int': Type.Integer,
-    'float': Type.Number,
-    'str': Type.String,
-    'bool': Type.Boolean,
-}
-"""
-Mapping between type names and swagger data types.
-"""
 
-
-SWAGGER_SPEC_TYPE_MAPPING = {
-    fields.IntegerField: Type.Integer,
-    fields.FloatField: Type.Number,
-    fields.BooleanField: Type.Boolean,
-}
+SWAGGER_SPEC_TYPE_MAPPING = {t.odin_field: t for t in Type}
 """
 Mapping of fields to Swagger types.
 """
@@ -130,12 +116,15 @@ class SwaggerSpec(api.ResourceApi):
     @staticmethod
     def generate_parameters(path):
         # type: (UrlPath) -> List[Dict[str, Any]]
-        return [{
-            'name': node.name,
-            'in': api.In.Path.value,
-            'type': DATA_TYPE_MAP.get(node.type, Type.String).value,
-            'required': True
-        } for node in path.nodes]
+        return [Param.path(node.name, node.type).to_swagger() for node in path.nodes]
+
+    @staticmethod
+    def swagger_node_formatter(path_node):
+        # type: (PathNode) -> str
+        """
+        Format a node for swagger spec (default formatter for the format method).
+        """
+        return "{{{}}}".format(path_node.name)
 
     def parse_operations(self):
         """
@@ -149,18 +138,20 @@ class SwaggerSpec(api.ResourceApi):
         paths = collections.OrderedDict()
         for path, operation in self.parent.op_paths():
             # Cut of first item (will be the parents path)
-            path = path[1:]
+            path = '/' + path[1:]  # type: UrlPath
 
             # Filter out swagger endpoints
-            # if self.SWAGGER_TAG in operation.tags:
-            #     continue
+            if self.SWAGGER_TAG in operation.tags:
+                continue
 
             # Add to resource definitions
             if operation.resource:
                 resource_defs[getmeta(operation.resource).resource_name] = resource_definition(operation.resource)
 
             # Add path parameters
-            path_spec = paths.setdefault(str(path), {})
+            path_spec = paths.setdefault(path.format(self.swagger_node_formatter), {})
+
+            # Add parameters
             parameters = self.generate_parameters(path)
             if parameters:
                 path_spec['parameters'] = parameters
