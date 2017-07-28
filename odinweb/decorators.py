@@ -7,16 +7,14 @@ A collection of decorators for identifying the various types of route.
 """
 from __future__ import absolute_import
 
-from collections import defaultdict
 from typing import Callable, Union, Tuple, Type, Dict, Any, Optional, Generator, List
 
 from odin import Resource
 from odin.exceptions import CodecDecodeError
-from odin.utils import force_tuple, lazy_property, getmeta
+from odin.utils import force_tuple, lazy_property
 
-from . import doc
 from .constants import *
-from .data_structures import NoPath, UrlPath, HttpResponse
+from .data_structures import NoPath, UrlPath, HttpResponse, PathNode, Param
 from .exceptions import HttpError
 from .resources import Listing
 from .utils import to_bool, dict_filter
@@ -62,7 +60,7 @@ class Operation(object):
         return inner(func) if func else inner
 
     def __init__(self, callback, url_path=NoPath, methods=Method.GET, resource=None, tags=None, summary=None):
-        # type: (Callable, UrlPath, Union(Method, Tuple[Method]), Type[Resource], Tags, Optional(str)) -> None
+        # type: (Callable, UrlPath, Union(Method, Tuple[Method]), Optional[Type[Resource]], Tags, Optional(str)) -> None
         """
         :param callback: Function we are routing
         :param url_path: A sub path that can be used as a action.
@@ -93,11 +91,11 @@ class Operation(object):
         self.consumes = set()
         self.produces = set()
         self.responses = {}
-        self._parameters = defaultdict(lambda: defaultdict(dict))
+        self.parameters = set()
         self._tags = set(force_tuple(tags))
 
         # Copy values from callback (if defined)
-        for attr in ('deprecated', 'consumes', 'produces', 'responses', '_parameters'):
+        for attr in ('deprecated', 'consumes', 'produces', 'responses', 'parameters'):
             value = getattr(callback, attr, None)
             if value is not None:
                 setattr(self, attr, value)
@@ -225,7 +223,7 @@ class Operation(object):
             tags=self.tags if self.tags else None,
             deprecated=True if self.deprecated else None,
             consumes=self.consumes if self.consumes else None,
-            parameters=self.parameters,
+            parameters=[param.to_swagger(self.resource) for param in self.parameters],
             produces=list(self.produces) if self.produces else None,
             responses=self.responses if self.responses else None,
         )
@@ -248,26 +246,6 @@ class Operation(object):
             if binding_tags:
                 tags.extend(binding_tags)
         return tags
-
-    @property
-    def parameters(self):
-        """
-        Build parameter definition
-        """
-        results = []
-
-        for param_type in (In.Path, In.Header, In.Query, In.Form):
-            results.extend(self._parameters[param_type].values())
-
-        if In.Body in self._parameters:
-            body_param = self._parameters[In.Body]
-            if self.resource:
-                body_param['schema'] = {
-                    '$ref': '#/definitions/{}'.format(getmeta(self.resource).resource_name)
-                }
-            results.append(body_param)
-
-        return results or None
 
 collection = collection_action = action = Operation
 
@@ -293,23 +271,18 @@ class ListOperation(Operation):
     max_offset = None
     max_limit = None
 
-    def __init__(self, callback, url_path=NoPath, methods=Method.GET, resource=None, tags=None,
-                 listing_resource=None, default_offset=None, default_limit=None, max_offset=None, max_limit=None):
-        super(ListOperation, self).__init__(callback, url_path, methods, resource, tags)
-        if listing_resource:
-            self.listing_resource = listing_resource
-        if default_offset is not None:
-            self.default_offset = default_offset
-        if default_limit is not None:
-            self.default_limit = default_limit
-        if max_offset is not None:
-            self.max_offset = max_offset
-        if max_limit is not None:
-            self.max_limit = max_limit
+    def __init__(self, *args, **kwargs):
+        self.listing_resource = kwargs.pop('listing_resource', self.listing_resource)
+        self.default_offset = kwargs.pop('default_offset', self.default_offset)
+        self.default_limit = kwargs.pop('default_limit', self.default_limit)
+        self.max_offset = kwargs.pop('max_offset', self.max_offset)
+        self.max_limit = kwargs.pop('max_limit', self.max_limit)
+
+        super(ListOperation, self).__init__(*args, **kwargs)
 
         # Apply documentation
-        doc.query_param('offset', Type.Integer, obj=self, description="Offset to start listing from.",
-                        default=self.default_offset, maximum=self.max_offset)
+        # doc.query_param('offset', Type.Integer, obj=self, description="Offset to start listing from.",
+        #                 default=self.default_offset, maximum=self.max_offset)
 
     def execute(self, request, *args, **path_args):
         # Get paging args from query string
@@ -342,9 +315,6 @@ class ListOperation(Operation):
             return result if bare else Listing(result, limit, offset, total_count)
 
 
-listing = ListOperation
-
-
 class ResourceOperation(Operation):
     """
     Handle processing a request with a resource body.
@@ -355,94 +325,104 @@ class ResourceOperation(Operation):
         super(ResourceOperation, self).__init__(*args, **kwargs)
 
         # Apply documentation
-        doc.body(obj=self)
+        self.parameters.add(Param.body('Expected resource supplied with request.'))
 
     def execute(self, request, *args, **path_args):
         item = self.get_resource(request) if self.resource else None
         return super(ResourceOperation, self).execute(request, item, *args, **path_args)
 
 
-resource_request = ResourceOperation
-
-
 # Shortcut methods
 
-
-def create(f=None, resource=None):
+def listing(callback=None, resource=None, default_limit=50, max_limit=None, tags=None, summary="List resources"):
     """
-    Decorator to indicate a creation endpoint.
+    Decorator to configure an operation that returns a list of resources.
 
-    :param f: Function we are routing
-    :param resource: Specify the resource that this function
-        encodes/decodes, default is the one specified on the ResourceAPI
-        instance.
-
-    """
-    def inner(func):
-        OperationDoc.bind(func).add_response(HTTPStatus.CREATED, "Resource has been created", resource)
-        return route(resource_request(func), PathType.Collection, Method.POST, resource)
-    return inner(f) if f else inner
-
-
-def detail(f=None, resource=None):
-    """
-    Decorator to indicate a detail endpoint.
-
-    :param f: Function we are routing
-    :param resource: Specify the resource that this function
-        encodes/decodes, default is the one specified on the ResourceAPI
-        instance.
+    :param callback: Operation callback
+    :param resource: Specify the resources that operation returns. Default is the resource specified on the bound
+        `ResourceAPI` instance.
+    :param default_limit: Default limit on responses; defaults to 50.
+    :param max_limit: Maximum limit value.
+    :param tags: Any tags to apply to operation.
+    :param summary: Summary of the operation.
 
     """
-    def inner(func):
-        OperationDoc.bind(func).add_response(HTTPStatus.OK, "Get a resource", resource)
-        return route(func, PathType.Resource, Method.GET, resource)
-    return inner(f) if f else inner
+    return ListOperation(callback, NoPath, Method.GET, resource, tags, summary,
+                         default_limit=default_limit, max_limit=max_limit)
+    # OperationDoc.bind(func).add_response(HTTPStatus.OK, "List of resources", Listing)
+    # OperationDoc.bind(func).query_param('offset', Type.Integer, "Offset of results")
+    # OperationDoc.bind(func).query_param('limit', Type.Integer, "Limit on number of items")
+    # OperationDoc.bind(func).query_param('bare', Type.Boolean, "Plain list of resources without Listing container")
 
 
-def update(f=None, resource=None):
+def create(callback=None, resource=None, tags=None, summary="Create a new resource"):
     """
-    Decorator to indicate an update endpoint.
+    Decorator to configure an operation that creates a resource.
 
-    :param f: Function we are routing
-    :param resource: Specify the resource that this function
-        encodes/decodes, default is the one specified on the ResourceAPI
-        instance.
-
-    """
-    def inner(func):
-        OperationDoc.bind(func).add_response(HTTPStatus.OK, "Resource has been updated.", resource)
-        return route(resource_request(func), PathType.Resource, Method.PUT, resource)
-    return inner(f) if f else inner
-
-
-def patch(f=None, resource=None):
-    """
-    Decorator to indicate a patch endpoint.
-
-    :param f: Function we are routing
-    :param resource: Specify the resource that this function
-        encodes/decodes, default is the one specified on the ResourceAPI
-        instance.
+    :param callback: Operation callback
+    :param resource: Specify the resource that operation accepts and returns. Default is the resource specified on the
+        bound `ResourceAPI` instance.
+    :param tags: Any tags to apply to operation.
+    :param summary: Summary of the operation.
 
     """
-    def inner(func):
-        OperationDoc.bind(func).add_response(HTTPStatus.OK, "Resource has been patched.", resource)
-        return route(resource_request(func), PathType.Resource, Method.PATCH, resource)
-    return inner(f) if f else inner
+    return ResourceOperation(callback, NoPath, Method.POST, resource, tags, summary)
+    # doc.response(HTTPStatus.CREATED, "Resource has been created", resource)
 
 
-def delete(f=None, resource=None):
+def detail(callback=None, resource=None, tags=None, summary="Get specified resource."):
     """
-    Decorator to indicate a deletion endpoint.
+    Decorator to configure an operation that fetches a resource.
 
-    :param f: Function we are routing
-    :param resource: Specify the resource that this function
-        encodes/decodes, default is the one specified on the ResourceAPI
-        instance.
+    :param callback: Operation callback
+    :param resource: Specify the resource that operation returns. Default is the resource specified on the bound
+        `ResourceAPI` instance.
+    :param tags: Any tags to apply to operation.
+    :param summary: Summary of the operation.
 
     """
-    def inner(func):
-        OperationDoc.bind(func).add_response(HTTPStatus.NO_CONTENT, "Resource has been deleted.")
-        return route(func, PathType.Resource, Method.DELETE, resource)
-    return inner(f) if f else inner
+    return Operation(callback, PathNode('resource_id'), Method.GET, resource, tags, summary)
+    # OperationDoc.bind(func).add_response(HTTPStatus.OK, "Get a resource", resource)
+
+
+def update(callback=None, resource=None, tags=None, summary="Update specified resource."):
+    """
+    Decorator to configure an operation that updates a resource.
+
+    :param callback: Operation callback
+    :param resource: Specify the resource that operation accepts and returns. Default is the resource specified on the
+        bound `ResourceAPI` instance.
+    :param tags: Any tags to apply to operation.
+    :param summary: Summary of the operation.
+
+    """
+    return ResourceOperation(callback, PathNode('resource_id'), Method.PUT, resource, tags, summary)
+    # OperationDoc.bind(func).add_response(HTTPStatus.OK, "Resource has been updated.", resource)
+
+
+def patch(callback=None, resource=None, tags=None, summary="Patch specified resource."):
+    """
+    Decorator to configure an operation that patches a resource.
+
+    :param callback: Operation callback
+    :param resource: Specify the resource that operation partially accepts and returns. Default is the resource
+        specified on the bound `ResourceAPI` instance.
+    :param tags: Any tags to apply to operation.
+    :param summary: Summary of the operation.
+
+    """
+    return ResourceOperation(callback, PathNode('resource_id'), Method.PATCH, resource, tags, summary)
+    # OperationDoc.bind(func).add_response(HTTPStatus.OK, "Resource has been patched.", resource)
+
+
+def delete(callback=None, tags=None, summary="Delete specified resource."):
+    """
+    Decorator to configure an operation that deletes resource.
+
+    :param callback: Operation callback
+    :param tags: Any tags to apply to operation.
+    :param summary: Summary of the operation.
+
+    """
+    return Operation(callback, PathNode('resource_id'), Method.DELETE, None, tags, summary)
+    # OperationDoc.bind(func).add_response(HTTPStatus.NO_CONTENT, "Resource has been deleted.")
