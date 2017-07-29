@@ -5,9 +5,9 @@ Documentation Decorators
 Additional decorators for improving documentation of APIs.
 
 """
-from typing import Callable, Optional
-
-from odin import Resource
+# Included for type support
+from typing import Callable, Optional  # noqa
+from odin import Resource  # noqa
 
 from . import _compat
 from .constants import HTTPStatus

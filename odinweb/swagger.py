@@ -1,4 +1,19 @@
 # -*- coding: utf-8 -*-
+"""
+Swagger Support
+~~~~~~~~~~~~~~~
+
+Built in support for generating a swagger spec, along with built in Swagger UI.
+
+To enable add the :py:class:`SwaggerSpec` resource API into your API::
+
+    >>> from odinweb import api
+    >>> from odinweb.swagger import SwaggerSpec
+    >>> my_api = api.ApiContainer(
+    ...    SwaggerSpec("Title of my Swagger spec", enable_ui=True),
+    ... )
+
+"""
 import collections
 import os
 
@@ -7,12 +22,14 @@ from typing import List, Dict, Any  # noqa
 from odin import fields
 from odin.utils import getmeta, lazy_property
 
-from . import api, doc
+from . import doc
 from . import resources
 from ._compat import binary_type
 from .constants import HTTPStatus, Method, Type
-from .data_structures import PathNode, UrlPath, Param
+from .containers import ResourceApi, CODECS
+from .data_structures import PathNode, UrlPath, Param, HttpResponse
 from .decorators import Operation
+from .exceptions import HttpError, ImmediateHttpResponse
 from .utils import dict_filter
 
 
@@ -67,7 +84,7 @@ def resource_definition(resource):
     return definition
 
 
-class SwaggerSpec(api.ResourceApi):
+class SwaggerSpec(ResourceApi):
     """
     Resource API instance that generates a Swagger spec of the current API.
     """
@@ -79,10 +96,10 @@ class SwaggerSpec(api.ResourceApi):
         # Register UI routes
         if enable_ui:
             self._operations.append(Operation(
-                SwaggerSpec.get_ui, api.UrlPath.parse('ui'), Method.GET,
+                SwaggerSpec.get_ui, UrlPath.parse('ui'), Method.GET,
             ))
             self._operations.append(Operation(
-                SwaggerSpec.get_static, api.UrlPath('ui', PathNode('file_name', api.Type.String))
+                SwaggerSpec.get_static, UrlPath('ui', PathNode('file_name', Type.String))
             ))
 
         super(SwaggerSpec, self).__init__()
@@ -162,7 +179,7 @@ class SwaggerSpec(api.ResourceApi):
 
         return paths, resource_defs
 
-    @api.Operation
+    @Operation
     @doc.response(HTTPStatus.OK, "Swagger JSON of this API")
     def get_swagger(self, request):
         """
@@ -170,7 +187,7 @@ class SwaggerSpec(api.ResourceApi):
         """
         api_base = self.parent
         if not api_base:
-            raise api.HttpError(404, 40442, "Swagger not available.",
+            raise HttpError(404, 40442, "Swagger not available.",
                                 "Swagger API is detached from a parent container.")
 
         paths, definitions = self.parse_operations()
@@ -183,25 +200,25 @@ class SwaggerSpec(api.ResourceApi):
             'host': self.host or request.host,
             'schemes': self.schemes,
             'basePath': str(self.base_path),
-            'consumes': list(api.CODECS.keys()),
-            'produces': list(api.CODECS.keys()),
+            'consumes': list(CODECS.keys()),
+            'produces': list(CODECS.keys()),
             'paths': paths,
             'definitions': definitions,
         })
 
     def load_static(self, file_name):
         if not self.enable_ui:
-            raise api.HttpError(404, 40401, "Not found")
+            raise HttpError(404, 40401, "Not found")
 
         static_path = os.path.join(os.path.dirname(__file__), 'static')
         file_path = os.path.abspath(os.path.join(static_path, file_name))
         if not file_path.startswith(static_path):
-            raise api.HttpError(404, 40401, "Not found")
+            raise HttpError(404, 40401, "Not found")
 
         try:
             return open(file_path, 'rb').read()
         except OSError:
-            raise api.HttpError(404, 40401, "Not found")
+            raise HttpError(404, 40401, "Not found")
 
     @doc.response(HTTPStatus.OK, "HTML content")
     @doc.produces('text/html')
@@ -214,7 +231,7 @@ class SwaggerSpec(api.ResourceApi):
             if isinstance(content, binary_type):
                 content = content.decode('UTF-8')
             self._ui_cache = content.replace(u"{{SWAGGER_PATH}}", str(self.swagger_path))
-        return api.HttpResponse(self._ui_cache, headers={'ContentType': 'text/html'})
+        return HttpResponse(self._ui_cache, headers={'ContentType': 'text/html'})
 
     @doc.response(HTTPStatus.OK, "HTML content")
     def get_static(self, _, file_name=None):
@@ -226,9 +243,9 @@ class SwaggerSpec(api.ResourceApi):
             'js': 'application/javascript',
         }.get(file_name[-2:])
         if not content_type:
-            raise api.ImmediateHttpResponse("Not Found", 404)
+            raise ImmediateHttpResponse("Not Found", 404)
 
-        return api.HttpResponse(self.load_static(file_name), headers={
+        return HttpResponse(self.load_static(file_name), headers={
             'Content-Type': content_type,
             'Content-Encoding': 'gzip',
             'Cache-Control': 'public, max-age=300',
