@@ -5,6 +5,33 @@ OdinWeb
 A Restful API framework for Python that uses Odin Resources with native support for `Swagger <https://swagger.io>`_
 and an integrated Swagger-UI.
 
+.. image:: https://img.shields.io/pypi/l/odinweb.svg?style=flat
+    :target: https://pypi.python.org/pypi/odinweb/
+    :alt: License
+
+.. image:: https://img.shields.io/pypi/v/odinweb.svg?style=flat
+    :target: https://pypi.python.org/pypi/odinweb/
+
+.. image:: https://img.shields.io/travis/python-odin/odinweb/master.svg?style=flat
+    :target: https://travis-ci.org/python-odin/odinweb
+    :alt: Travis CI Status
+
+.. image:: https://codecov.io/gh/python-odin/odinweb/branch/master/graph/badge.svg
+    :target: https://codecov.io/gh/python-odin/odinweb
+    :alt: Code cov
+
+.. image:: https://landscape.io/github/python-odin/odinweb/master/landscape.svg?style=flat
+   :target: https://landscape.io/github/python-odin/odinweb/master
+   :alt: Code Health
+
+.. image:: https://img.shields.io/requires/github/python-odin/odinweb.svg?style=flat
+    :target: https://requires.io/github/python-odin/odinweb/requirements/?branch=master
+    :alt: Requirements Status
+
+.. image:: https://img.shields.io/badge/gitterim-timsavage.odin-brightgreen.svg?style=flat
+    :target: https://gitter.im/timsavage/odin
+    :alt: Gitter.im
+
 The initial development effort currently supports:
 
 - `Flask <http://flask.pocoo.org/>`_
@@ -70,46 +97,52 @@ Next define your API::
 
     from odinweb import api
 
-    USERS = {
-        1: User(1, 'pimpstar24', 'Bender', 'Rodreges', 'bender@ilovebender.com'),
-        2: User(2, 'zoidberg', 'Zoidberg', '', 'zoidberg@freemail.web'),
-        3: User(3, 'amylove79', 'Amy', 'Wong', 'awong79@marslink.web'),
-    }
+    USERS = [
+        User(1, 'pimpstar24', 'Bender', 'Rodreges', 'bender@ilovebender.com'),
+        User(2, 'zoidberg', 'Zoidberg', '', 'zoidberg@freemail.web'),
+        User(3, 'amylove79', 'Amy', 'Wong', 'awong79@marslink.web'),
+    ]
+    USER_ID = len(USERS)
 
 
     class UserApi(api.ResourceApi):
         resource = User
+        tags = ['user']
 
-        @api.collection
-        def list_users(self, request, offset, limit):
-            """
-            Get user list
-            """
-            return USERS[offset:offset+limit], len(USERS)  # Total count of users
+        @api.listing
+        def get_user_list(self, request, offset, limit):
+            return USERS[offset:offset+limit], len(USERS)
 
         @api.create
         def create_user(self, request, user):
-            """
-            Create a new user.
-            """
-            # The user resource is populated and validated by Odin Web
-            global USERS
+            global USER_ID
 
             # Add user to list
-            user.id = len(USERS)
-            USERS[user.id] = user
+            USER_ID += 1
+            user.id = USER_ID
+            USERS.append(user)
 
             return user
 
         @api.detail
         def get_user(self, request, resource_id):
             """
-            Get a user
+            Get a user object
             """
-            user = USERS.get(resource_id)
-            if not user:
-                raise api.Error.from_status(api.HTTPStatus.NOT_FOUND)
-            return user
+            for user in USERS:
+                if user.id == resource_id:
+                    return user
+
+            raise api.Error.from_status(api.HTTPStatus.NOT_FOUND)
+
+        @api.delete
+        def delete_user(self, request, resource_id):
+            for idx, user in enumerate(USERS):
+                if user.id == resource_id:
+                    USERS.remove(user)
+                    return api.create_response(200)
+
+            raise api.Error.from_status(api.HTTPStatus.NOT_FOUND)
 
 This defines an API for listing, fetching and creating a users.
 
