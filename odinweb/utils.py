@@ -27,21 +27,6 @@ def random_string(bit_depth=64):
     return base64.urlsafe_b64encode(os.urandom(bit_depth/8)).rstrip('=')
 
 
-def parse_content_type(value):
-    # type: (str) -> str
-    """
-    Parse out the content type from a content type header.
-    
-    >>> parse_content_type('application/json; charset=utf8')
-    'application/json'
-    
-    """
-    if not value:
-        return ''
-
-    return value.split(';')[0].strip()
-
-
 def to_bool(value):
     # type: (Any) -> bool
     """

@@ -10,21 +10,20 @@ from __future__ import absolute_import
 from typing import Callable, Union, Tuple, Dict, Any, Optional, Generator, List  # noqa
 
 from odin import Resource
-from odin.exceptions import CodecDecodeError
 from odin.utils import force_tuple, lazy_property
 
 from .constants import HTTPStatus, Method, Type
 from .data_structures import NoPath, UrlPath, HttpResponse, PathNode, Param, Response
-from .exceptions import HttpError
+from .helpers import get_resource
 from .resources import Listing, Error
 from .utils import to_bool, dict_filter, make_decorator
 
 __all__ = (
-    'Operation',
+    'Operation', 'ListOperation', 'ResourceOperation',
     # Basic routes
-    'collection', 'collection_action',  # 'resource_route', 'resource_action',
+    'collection', 'collection_action', 'action', 'operation',
     # Shortcuts
-    'listing', 'create', 'detail', 'update', 'patch', 'delete', 'action',  #'detail_action',
+    'listing', 'create', 'detail', 'update', 'patch', 'delete',
 )
 
 # Type definitions
@@ -154,40 +153,6 @@ class Operation(object):
             url_path = path_prefix + url_path
 
         yield url_path, self
-
-    def decode_body(self, request):
-        """
-        Helper method that ensures that decodes any body content into a string object
-        (this is needed by the json module for example).
-        """
-        body = request.body
-        if isinstance(body, bytes):
-            return body.decode('UTF8')
-        return body
-
-    def get_resource(self, request, allow_multiple=False):
-        """
-        Get a resource instance from ``request.body``.
-        """
-        try:
-            body = self.decode_body(request)
-        except UnicodeDecodeError as ude:
-            raise HttpError(HTTPStatus.BAD_REQUEST, 40099, "Unable to decode request body.", str(ude))
-
-        try:
-            resource = request.request_codec.loads(body, resource=self.resource, full_clean=True)
-
-        except ValueError as ve:
-            raise HttpError(HTTPStatus.BAD_REQUEST, 40098, "Unable to load resource.", str(ve))
-
-        except CodecDecodeError as cde:
-            raise HttpError(HTTPStatus.BAD_REQUEST, 40096, "Unable to decode body.", str(cde))
-
-        # Check an array of data hasn't been supplied
-        if not allow_multiple and isinstance(resource, list):
-            raise HttpError(HTTPStatus.BAD_REQUEST, 40097, "Expected a single resource not a list.")
-
-        return resource
 
     @lazy_property
     def resource(self):
@@ -328,7 +293,7 @@ class ResourceOperation(Operation):
         self.parameters.add(Param.body('Expected resource supplied with request.'))
 
     def execute(self, request, *args, **path_args):
-        item = self.get_resource(request) if self.resource else None
+        item = get_resource(request, self.resource) if self.resource else None
         return super(ResourceOperation, self).execute(request, item, *args, **path_args)
 
 
