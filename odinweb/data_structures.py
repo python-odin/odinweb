@@ -321,3 +321,12 @@ class Response(object):
             return 'default', response_def
         else:
             return self.status.value, response_def
+
+
+class DefaultResponse(Response):
+    """
+    Default response object
+    """
+    def __init__(self, description, resource=DefaultResource):
+        # type: (str, Optional(Resource)) -> None
+        super(DefaultResponse, self).__init__('default', description, resource)
