@@ -13,7 +13,7 @@ from odin import Resource
 from odin.utils import force_tuple, lazy_property
 
 from .constants import HTTPStatus, Method, Type
-from .data_structures import NoPath, UrlPath, HttpResponse, PathNode, Param, Response
+from .data_structures import NoPath, UrlPath, HttpResponse, PathNode, Param, Response, DefaultResponse
 from .helpers import get_resource
 from .resources import Listing, Error
 from .utils import to_bool, dict_filter, make_decorator
@@ -100,7 +100,7 @@ class Operation(object):
                 setattr(self, attr, value)
 
         # Add a default response
-        self.responses.add(Response('default', 'Error', Error))
+        self.responses.add(DefaultResponse('Unhandled error', Error))
 
     def __call__(self, request, path_args):
         # type: (HttpRequest, Dict[Any]) -> Any
@@ -333,6 +333,7 @@ def create(callback, resource=None, tags=None, summary="Create a new resource"):
     """
     op = ResourceOperation(callback, NoPath, Method.POST, resource, tags, summary)
     op.responses.add(Response(HTTPStatus.CREATED, "{name} has been created"))
+    op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
     return op
 
 
@@ -350,6 +351,7 @@ def detail(callback, resource=None, tags=None, summary="Get specified resource."
     """
     op = Operation(callback, PathNode('resource_id'), Method.GET, resource, tags, summary)
     op.responses.add(Response(HTTPStatus.OK, "Get a {name}"))
+    op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
     return op
 
 
@@ -367,6 +369,8 @@ def update(callback, resource=None, tags=None, summary="Update specified resourc
     """
     op = ResourceOperation(callback, PathNode('resource_id'), Method.PUT, resource, tags, summary)
     op.responses.add(Response(HTTPStatus.NO_CONTENT, "{name} has been updated."))
+    op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
+    op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
     return op
 
 
@@ -384,6 +388,8 @@ def patch(callback, resource=None, tags=None, summary="Patch specified resource.
     """
     op = ResourceOperation(callback, PathNode('resource_id'), Method.PATCH, resource, tags, summary)
     op.responses.add(Response(HTTPStatus.OK, "{name} has been patched."))
+    op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
+    op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
     return op
 
 
@@ -399,4 +405,5 @@ def delete(callback, tags=None, summary="Delete specified resource."):
     """
     op = Operation(callback, PathNode('resource_id'), Method.DELETE, None, tags, summary)
     op.responses.add(Response(HTTPStatus.NO_CONTENT, "{name} has been deleted.", None))
+    op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
     return op
