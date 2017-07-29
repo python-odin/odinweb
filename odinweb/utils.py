@@ -10,9 +10,11 @@ from __future__ import absolute_import
 import os
 import base64
 import itertools
+
 from functools import wraps
 
-from typing import Any  # noqa
+# Typing imports
+from typing import Any, Callable  # noqa
 
 from . import _compat
 
@@ -65,16 +67,14 @@ def dict_filter(*args, **kwargs):
 
 
 def make_decorator(decorator):
+    # type: (Callable) -> Callable
     """
     Convert a function into a decorator.
     """
     @wraps(decorator)
-    def wrapper(f=None, *args, **kwargs):
-        def inner(func):
-            return decorator(func, *args, **kwargs) or func
-        if not callable(f):
-            a = [f]
-            a.extend(args)
-            args, f = a, None
-        return inner(f) if f else inner
+    def wrapper(*args, **kwargs):
+        if args and callable(args[0]):
+            return decorator(*args, **kwargs) or args[0]
+        else:
+            return lambda f: decorator(f, *args, **kwargs) or f
     return wrapper
