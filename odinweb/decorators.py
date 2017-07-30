@@ -185,7 +185,7 @@ class Operation(object):
 
     @lazy_property
     def operation_id(self):
-        return self.base_callback.__name__
+        return "{}.{}".format(self.base_callback.__module__, self.base_callback.__name__)
 
     @property
     def tags(self):
