@@ -4,11 +4,11 @@ from collections import namedtuple
 from typing import Dict, Union, Optional, Callable, Any, AnyStr  # noqa
 from odin import Resource  # noqa
 
-from odin.utils import getmeta
+from odin.utils import getmeta, lazy_property
 
 from . import _compat
 from .constants import HTTPStatus, In, Type
-from .utils import dict_filter
+from .utils import dict_filter, sort_by_priority
 
 __all__ = ('DefaultResource', 'HttpResponse', 'UrlPath', 'PathNode', 'NoPath', 'Param', 'Response')
 
@@ -330,3 +330,18 @@ class DefaultResponse(Response):
     def __init__(self, description, resource=DefaultResource):
         # type: (str, Optional(Resource)) -> None
         super(DefaultResponse, self).__init__('default', description, resource)
+
+
+class MiddlewareList(list):
+    """
+    List of middleware with filtering and sorting builtin.
+    """
+    @lazy_property
+    def pre_dispatch(self):
+        middleware = sort_by_priority(self)
+        return [m.pre_dispatch for m in middleware if hasattr(m, 'pre_dispatch')]
+
+    @lazy_property
+    def post_dispatch(self):
+        middleware = sort_by_priority(self, reverse=True)
+        return [m.post_dispatch for m in middleware if hasattr(m, 'post_dispatch')]

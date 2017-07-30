@@ -20,7 +20,7 @@ from odin.utils import getmeta
 from . import _compat
 from . import content_type_resolvers
 from .constants import Type, Method, HTTPStatus
-from .data_structures import UrlPath, NoPath, HttpResponse
+from .data_structures import UrlPath, NoPath, HttpResponse, MiddlewareList
 from .decorators import Operation
 from .exceptions import ImmediateHttpResponse
 from .helpers import resolve_content_type, create_response
@@ -277,6 +277,7 @@ class ApiInterfaceBase(ApiContainer):
         options.setdefault('name', 'api')
         options.setdefault('path_prefix', UrlPath('', options['name']))
         self.debug_enabled = options.pop('debug_enabled', False)
+        self.middleware = MiddlewareList(options.pop('middleware', []))
         super(ApiInterfaceBase, self).__init__(*containers, **options)
 
         if not self.path_prefix.is_absolute:
@@ -323,7 +324,14 @@ class ApiInterfaceBase(ApiContainer):
         status = headers = None
 
         try:
+            # path_args is passed by ref so changes can be made.
+            for middleware in self.middleware.pre_dispatch:
+                middleware(request, path_args)
+
             resource = operation(request, path_args)
+
+            for middleware in self.middleware.post_dispatch:
+                resource = middleware(request, resource)
 
         except ImmediateHttpResponse as e:
             # An exception used to return a response immediately, skipping any

@@ -7,13 +7,14 @@ A collection of decorators for identifying the various types of route.
 """
 from __future__ import absolute_import
 
+# Imports for typing support
 from typing import Callable, Union, Tuple, Dict, Any, Optional, Generator, List  # noqa
 
 from odin import Resource
 from odin.utils import force_tuple, lazy_property
 
 from .constants import HTTPStatus, Method, Type
-from .data_structures import NoPath, UrlPath, HttpResponse, PathNode, Param, Response, DefaultResponse
+from .data_structures import NoPath, UrlPath, PathNode, Param, Response, DefaultResponse, MiddlewareList
 from .helpers import get_resource
 from .resources import Listing, Error
 from .utils import to_bool, dict_filter, make_decorator
@@ -28,9 +29,6 @@ __all__ = (
 
 # Type definitions
 Tags = Union[str, Tuple[str]]
-HttpRequest = Any
-PreDispatch = Callable[[HttpRequest, Dict[str, Any]], HttpResponse]
-PostDispatch = Callable[[HttpRequest, HttpResponse], HttpResponse]
 
 
 class Operation(object):
@@ -50,6 +48,7 @@ class Operation(object):
 
     """
     _operation_count = 0
+    priority = 100  # Set limit high as this should be the last item
 
     def __new__(cls, func=None, *args, **kwargs):
         def inner(callback):
@@ -58,7 +57,8 @@ class Operation(object):
             return instance
         return inner(func) if func else inner
 
-    def __init__(self, callback, url_path=NoPath, methods=Method.GET, resource=None, tags=None, summary=None):
+    def __init__(self, callback, url_path=NoPath, methods=Method.GET, resource=None, tags=None, summary=None,
+                 middleware=None):
         # type: (Callable, UrlPath, Union(Method, Tuple[Method]), Optional[Resource], Tags, Optional(str)) -> None
         """
         :param callback: Function we are routing
@@ -80,9 +80,8 @@ class Operation(object):
         # If this operation is bound to a ResourceAPI
         self.binding = None
 
-        # Dispatch hooks
-        self._pre_dispatch = getattr(self, 'pre_dispatch', None)  # type: PreDispatch
-        self._post_dispatch = getattr(self, 'post_dispatch', None)  # type: PostDispatch
+        self.middleware = MiddlewareList(middleware or [])
+        self.middleware.append(self)  # Add self as middleware to obtain pre-dispatch support
 
         # Documentation
         self.deprecated = False
@@ -103,21 +102,20 @@ class Operation(object):
         self.responses.add(DefaultResponse('Unhandled error', Error))
 
     def __call__(self, request, path_args):
-        # type: (HttpRequest, Dict[Any]) -> Any
+        # type: (Any, Dict[Any]) -> Any
         """
         Main wrapper around the operation callback function.
         """
-        # Allow for a pre_dispatch hook, path_args is passed by ref so changes can be made.
-        if self._pre_dispatch:
-            self._pre_dispatch(request, path_args)
+        # path_args is passed by ref so changes can be made.
+        for middleware in self.middleware.pre_dispatch:
+            middleware(request, path_args)
 
         response = self.execute(request, **path_args)
 
-        # Allow for a post_dispatch hook, the response of which is returned
-        if self._post_dispatch:
-            return self._post_dispatch(request, response)
-        else:
-            return response
+        for middleware in self.middleware.post_dispatch:
+            response = middleware(request, response)
+
+        return response
 
     def execute(self, request, *args, **path_args):
         # type: (HttpRequest, tuple, Dict[Any]) -> Any
@@ -136,12 +134,7 @@ class Operation(object):
         Bind a ResourceApi instance to an operation.
         """
         self.binding = instance
-
-        # Configure hooks
-        if self._pre_dispatch is None:
-            self._pre_dispatch = getattr(instance, 'pre_dispatch', None)
-        if self._post_dispatch is None:
-            self._post_dispatch = getattr(instance, 'pos_dispatch', None)
+        self.middleware.append(instance)
 
     def op_paths(self, path_prefix=None):
         # type: (Optional[Union[str, UrlPath]]) -> Generator[Tuple[UrlPath, Operation]]
