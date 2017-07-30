@@ -78,3 +78,10 @@ def make_decorator(decorator):
         else:
             return lambda f: decorator(f, *args, **kwargs) or f
     return wrapper
+
+
+def sort_by_priority(iterable, reverse=False, default_priority=10):
+    """
+    Return a list or objects sorted by a priority value.
+    """
+    return sorted(iterable, reverse=reverse, key=lambda o: getattr(o, 'priority', default_priority))
