@@ -7,7 +7,7 @@ Exceptions
 from .constants import HTTPStatus
 from .resources import Error
 
-__all__ = ('ImmediateHttpResponse', 'HttpError', 'PermissionDenied')
+__all__ = ('ImmediateHttpResponse', 'HttpError', 'PermissionDenied', 'AccessDenied')
 
 
 class ImmediateHttpResponse(Exception):
@@ -32,7 +32,15 @@ class HttpError(ImmediateHttpResponse):
 
 class PermissionDenied(HttpError):
     """
-    Permission to access the specified resource is denied.
+    Authorization is required before making this request.
     """
     def __init__(self, message=None, developer_method=None, headers=None):
-        super(PermissionDenied, self).__init__(HTTPStatus.FORBIDDEN, 0, message, developer_method, None, headers)
+        super(PermissionDenied, self).__init__(HTTPStatus.UNAUTHORIZED, 0, message, developer_method, None, headers)
+
+
+class AccessDenied(HttpError):
+    """
+    Access to the specified resource is denied.
+    """
+    def __init__(self, message=None, developer_method=None, headers=None):
+        super(AccessDenied, self).__init__(HTTPStatus.FORBIDDEN, 0, message, developer_method, None, headers)
