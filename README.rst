@@ -34,11 +34,11 @@ and an integrated Swagger-UI.
 
 The initial development effort currently supports:
 
-- `Flask <http://flask.pocoo.org/>`_ - `
+- `Flask <http://flask.pocoo.org/>`_
 - `Bottle <https://bottlepy.org>`_
 - `Django <https://wwww.djangoproject.org/>`_ - Odin/Django integration is already implemented with
   `baldr <https://github.com/python-odin/baldr>`_. Odin Web is an evolution of the design of baldr. Baldr still includes
-    other integration between django and odin, once merged Baldr will be depreciated
+  other integration between django and odin, once merged Baldr will be depreciated
 
 With the following frameworks to be included once a stable API is established:
 
