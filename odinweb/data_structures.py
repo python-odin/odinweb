@@ -338,10 +338,27 @@ class MiddlewareList(list):
     """
     @lazy_property
     def pre_dispatch(self):
+        """
+        List of pre-dispatch methods from registered middleware.
+        """
         middleware = sort_by_priority(self)
-        return [m.pre_dispatch for m in middleware if hasattr(m, 'pre_dispatch')]
+        return tuple(m.pre_dispatch for m in middleware if hasattr(m, 'pre_dispatch'))
 
     @lazy_property
     def post_dispatch(self):
+        """
+        List of post-dispatch methods from registered middleware.
+        """
         middleware = sort_by_priority(self, reverse=True)
-        return [m.post_dispatch for m in middleware if hasattr(m, 'post_dispatch')]
+        return tuple(m.post_dispatch for m in middleware if hasattr(m, 'post_dispatch'))
+
+    @lazy_property
+    def post_swagger(self):
+        """
+        List of post-swagger methods from registered middleware.
+
+        This is used to modify documentation (eg add/remove any extra information, provided by the middleware)
+
+        """
+        middleware = sort_by_priority(self)
+        return [m.post_swagger for m in middleware if hasattr(m, 'post_swagger')]
