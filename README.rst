@@ -34,15 +34,15 @@ and an integrated Swagger-UI.
 
 The initial development effort currently supports:
 
-- `Flask <http://flask.pocoo.org/>`_
+- `Flask <http://flask.pocoo.org/>`_ - `
 - `Bottle <https://bottlepy.org>`_
+- `Django <https://wwww.djangoproject.org/>`_ - Odin/Django integration is already implemented with
+  `baldr <https://github.com/python-odin/baldr>`_. Odin Web is an evolution of the design of baldr. Baldr still includes
+    other integration between django and odin, once merged Baldr will be depreciated
 
 With the following frameworks to be included once a stable API is established:
 
 - `Retort <https://github.com/timsavage/retort>`_ - A Flask/Bottle like framework for AWS Lambda/API Gateway
-- `Django <https://wwww.djangoproject.org/>`_ - Odin/Django integration is already implemented with
-  `baldr <https://github.com/python-odin/baldr>`_. Odin Web is an evolution of the design of baldr and will
-  be swapped in favour of OdinWeb in the future. Baldr also includes other integration with Django.
 
 There are no plans at this point for other libraries although I'm open to suggestions/contributions. The effort
 required to integrate other libraries is minimal as Odin Web was designed to be agnostic of the framework it is
@@ -70,6 +70,8 @@ Install your preferred web framework::
     git clone git@github.com:python-odin/odinweb.flask.git
     # or
     git clone git@github.com:python-odin/odinweb.bottle.git
+    # or
+    git clone git@github.com:python-odin/odinweb.django.git
 
     # Change into the appropriate directory then
     python setup.py install
