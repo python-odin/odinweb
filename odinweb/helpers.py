@@ -1,7 +1,7 @@
 # Type imports
 from typing import Iterable, Callable, Any, Optional
 
-from odin.exceptions import CodecDecodeError
+from odin.exceptions import CodecDecodeError, ResourceException
 
 from .constants import HTTPStatus
 from .data_structures import HttpResponse
@@ -39,6 +39,9 @@ def resolve_content_type(type_resolvers, request):
 def get_resource(request, resource, allow_multiple=False):
     """
     Get a resource instance from ``request.body``.
+
+    Note error code 98 is returned in multiple places, this is to prevent leakage of details of defined resources.
+
     """
     # Decode the request body.
     body = request.body
@@ -46,20 +49,28 @@ def get_resource(request, resource, allow_multiple=False):
         try:
             body = body.decode('UTF8')
         except UnicodeDecodeError as ude:
-            raise HttpError(HTTPStatus.BAD_REQUEST, 40099, "Unable to decode request body.", str(ude))
+            raise HttpError(HTTPStatus.BAD_REQUEST, 99, "Unable to decode request body.", str(ude))
 
     try:
         instance = request.request_codec.loads(body, resource=resource, full_clean=True)
 
-    except ValueError as ve:
-        raise HttpError(HTTPStatus.BAD_REQUEST, 40098, "Unable to load resource.", str(ve))
+    except ResourceException:
+        raise HttpError(HTTPStatus.BAD_REQUEST, 98, "Invalid resource type.")
 
     except CodecDecodeError as cde:
-        raise HttpError(HTTPStatus.BAD_REQUEST, 40096, "Unable to decode body.", str(cde))
+        raise HttpError(HTTPStatus.BAD_REQUEST, 96, "Unable to decode body.", str(cde))
 
-    # Check an array of data hasn't been supplied
-    if not allow_multiple and isinstance(instance, list):
-        raise HttpError(HTTPStatus.BAD_REQUEST, 40097, "Expected a single resource not a list.")
+    # Check we have the correct resource
+    if isinstance(instance, list):
+        # Check types first. This is to prevent being able to infer other resource types by sending lists of them.
+        if any(not isinstance(i, resource) for i in instance):
+            raise HttpError(HTTPStatus.BAD_REQUEST, 98, "Invalid resource type.")
+
+        if not allow_multiple:
+            raise HttpError(HTTPStatus.BAD_REQUEST, 97, "Expected a single resource not a list.")
+
+    elif not isinstance(instance, resource):
+        raise HttpError(HTTPStatus.BAD_REQUEST, 98, "Invalid resource type.")
 
     return instance
 
