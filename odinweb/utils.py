@@ -19,14 +19,26 @@ from typing import Any, Callable  # noqa
 from . import _compat
 
 
-def random_string(bit_depth=64):
-    # type: (int) -> str
-    """
-    Generate a random string of a certain bit depth
-    """
-    if bit_depth % 8 != 0:
-        raise ValueError("Bit depth must be a multiple of 8")
-    return base64.urlsafe_b64encode(os.urandom(bit_depth/8)).rstrip('=')
+if _compat.PY2:
+    def random_string(bit_depth=64):
+        # type: (int) -> str
+        """
+        Generate a random string of a certain bit depth
+        """
+        if bit_depth % 8 != 0:
+            raise ValueError("Bit depth must be a multiple of 8")
+        return base64.urlsafe_b64encode(os.urandom(bit_depth/8)).rstrip('=')
+
+else:
+    def random_string(bit_depth=64):
+        # type: (int) -> str
+        """
+        Generate a random string of a certain bit depth
+        """
+        if bit_depth % 8 != 0:
+            raise ValueError("Bit depth must be a multiple of 8")
+        data = os.urandom(int(bit_depth / 8))
+        return base64.urlsafe_b64encode(data).decode().rstrip('=')
 
 
 def to_bool(value):
