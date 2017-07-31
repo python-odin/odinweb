@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import pytest
+import sys
 
 from odinweb.data_structures import HttpResponse, UrlPath, PathNode, _to_swagger, Param, Response, DefaultResponse, \
     MiddlewareList
@@ -368,6 +369,7 @@ class MiddlewareC(object):
         pass
 
 
+@pytest.mark.skipif(sys.version_info < (3, 0), reason="requires python3.x")
 class TestMiddlewareList(object):
     target = MiddlewareList((MiddlewareA(), MiddlewareB(), MiddlewareC()))
 
