@@ -9,7 +9,7 @@ To enable add the :py:class:`SwaggerSpec` resource API into your API::
 
     >>> from odinweb import api
     >>> from odinweb.swagger import SwaggerSpec
-    >>> my_api = api.ApiContainer(
+    >>> my_api = api.ApiCollection(
     ...    SwaggerSpec("Title of my Swagger spec", enable_ui=True),
     ... )
 
@@ -133,7 +133,7 @@ class SwaggerSpec(ResourceApi):
     @staticmethod
     def generate_parameters(path):
         # type: (UrlPath) -> List[Dict[str, Any]]
-        return [Param.path(node.name, node.type).to_swagger() for node in path.nodes]
+        return [Param.path(node.name, node.type).to_swagger() for node in path.path_nodes]
 
     @staticmethod
     def swagger_node_formatter(path_node):
