@@ -1,12 +1,12 @@
-# from __future__ import absolute_import
-#
-# import pytest
+from __future__ import absolute_import
+
+import pytest
 # import mock
 #
 # from odin.codecs import json_codec
 # from odin.exceptions import ValidationError, CodecDecodeError
 #
-# from odinweb import api, containers
+from odinweb import containers
 # from odinweb.constants import *
 #
 # from .resources import User

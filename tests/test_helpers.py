@@ -80,7 +80,6 @@ def test_get_resource__multiple():
 ))
 def test_get_resource__codec_exceptions(body, error_code):
     request = MockRequest(body=body)
-    request.request_codec = json_codec
 
     with pytest.raises(HttpError) as exc_info:
         helpers.get_resource(request, User)
@@ -108,7 +107,6 @@ class TestCreateResponse(object):
 
     def test_content(self):
         request = MockRequest()
-        request.response_codec = json_codec
 
         actual = helpers.create_response(request, {"foo": "bar"})
 
@@ -119,7 +117,6 @@ class TestCreateResponse(object):
 
     def test_content_custom_status(self):
         request = MockRequest()
-        request.response_codec = json_codec
 
         actual = helpers.create_response(request, {"foo": "bar"}, status=HTTPStatus.CREATED)
 
