@@ -359,7 +359,12 @@ class MiddlewareB(object):
 
 
 class MiddlewareC(object):
+    priority = 5
+
     def pre_dispatch(self):
+        pass
+
+    def post_dispatch(self):
         pass
 
 
@@ -368,7 +373,7 @@ class TestMiddlewareList(object):
 
     def test_pre_dispatch(self):
         count = 0
-        for actual, expected in zip(self.target.pre_dispatch, (MiddlewareA, MiddlewareC)):
+        for actual, expected in zip(self.target.pre_dispatch, (MiddlewareC, MiddlewareA)):
             assert actual.__func__.__qualname__ == expected.pre_dispatch.__qualname__
             count += 1
         assert count == 2
