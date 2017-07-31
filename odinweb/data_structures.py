@@ -4,7 +4,7 @@ from collections import namedtuple
 from typing import Dict, Union, Optional, Callable, Any, AnyStr  # noqa
 from odin import Resource  # noqa
 
-from odin.utils import getmeta, lazy_property
+from odin.utils import getmeta, lazy_property, force_tuple
 
 from . import _compat
 from .constants import HTTPStatus, In, Type
@@ -68,6 +68,32 @@ def _add_nodes(a, b):
     if b and b[0] == '':
         raise ValueError("Right hand argument cannot be absolute.")
     return a + b
+
+
+def _to_swagger(base=None, description=None, resource=None, options=None):
+    # type: (Dict[str, str], str, Resource, Dict[str, str]) -> Dict[str, str]
+    """
+    Common to swagger definition.
+
+    :param base: The base dict.
+    :param description: An optional description.
+    :param resource: An optional resource.
+    :param options: Any additional options
+
+    """
+    definition = dict_filter(base or {}, options or {})
+
+    if description:
+        definition['description'] = description.format(
+            name=getmeta(resource).name if resource else "UNKNOWN"
+        )
+
+    if resource:
+        definition['schema'] = {
+            '$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)
+        }
+
+    return definition
 
 
 class UrlPath(object):
@@ -141,7 +167,7 @@ class UrlPath(object):
 
     def __getitem__(self, item):
         # type: (Union[int, slice]) -> UrlPath
-        return UrlPath(*self._nodes[item])
+        return UrlPath(*force_tuple(self._nodes[item]))
 
     @property
     def is_absolute(self):
@@ -150,6 +176,13 @@ class UrlPath(object):
         Is an absolute URL
         """
         return len(self._nodes) and self._nodes[0] == ''
+
+    @property
+    def path_nodes(self):
+        """
+        Return iterator of PathNode items
+        """
+        return (n for n in self._nodes if isinstance(n, PathNode))
 
     @staticmethod
     def odinweb_node_formatter(path_node):
@@ -161,13 +194,6 @@ class UrlPath(object):
             return "{{{}:{}}}".format(path_node.name, path_node.type.value)
         return "{{{}}}".format(path_node.name)
 
-    @property
-    def nodes(self):
-        """
-        Return iterator of PathNode items
-        """
-        return (n for n in self._nodes if isinstance(n, PathNode))
-
     def format(self, node_formatter=None):
         # type: (Optional[Callable[[PathNode], str]]) -> str
         """
@@ -177,8 +203,11 @@ class UrlPath(object):
         `PathNode` into a string to support the current web framework.  
         
         """
-        node_formatter = node_formatter or self.odinweb_node_formatter
-        return '/'.join(node_formatter(n) if isinstance(n, PathNode) else n for n in self._nodes)
+        if self._nodes == ('',):
+            return '/'
+        else:
+            node_formatter = node_formatter or self.odinweb_node_formatter
+            return '/'.join(node_formatter(n) if isinstance(n, PathNode) else n for n in self._nodes)
 
 NoPath = UrlPath()
 
@@ -195,23 +224,27 @@ class Param(object):
         """
         Define a path parameter
         """
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise ValueError("Minimum must be less than or equal to the maximum.")
         return cls(name, In.Path, type_, None, description,
                    default=default, minimum=minimum, maximum=maximum,
-                   enum=enum, **options)
+                   enum=enum, required=True, **options)
 
     @classmethod
-    def query(cls, name, type_=Type.String, description=None, required=False, default=None,
+    def query(cls, name, type_=Type.String, description=None, required=None, default=None,
               minimum=None, maximum=None, enum=None, **options):
         """
         Define a query parameter
         """
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise ValueError("Minimum must be less than or equal to the maximum.")
         return cls(name, In.Query, type_, None, description,
                    required=required, default=default,
                    minimum=minimum, maximum=maximum,
                    enum=enum, **options)
 
     @classmethod
-    def header(cls, name, type_=Type.String, description=None, default=None, required=False, **options):
+    def header(cls, name, type_=Type.String, description=None, default=None, required=None, **options):
         """
         Define a header parameter.
         """
@@ -224,22 +257,24 @@ class Param(object):
         """
         Define body parameter.
         """
-        return cls('body', In.Body, None, resource, description,
+        return cls('body', In.Body, None, resource, description, required=True,
                    default=default, **options)
 
     @classmethod
-    def form(cls, name, type_=Type.String, description=None, required=False, default=None,
+    def form(cls, name, type_=Type.String, description=None, required=None, default=None,
              minimum=None, maximum=None, enum=None, **options):
         """
         Define form parameter.
         """
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise ValueError("Minimum must be less than or equal to the maximum.")
         return cls(name, In.Form, type_, None, description,
                    required=required, default=default,
                    minimum=minimum, maximum=maximum,
                    enum=enum, **options)
 
     def __init__(self, name, in_, type_=None, resource=None, description=None, **options):
-        # type: (str, In, Optional[Type], Optional(Resource), Optional(str), **Dict[str, Any]) -> None
+        # type: (str, In, Optional[Type], Optional(Resource), Optional(str), **Any) -> None
         self.name = name
         self.in_ = in_
         self.type = type_
@@ -251,7 +286,7 @@ class Param(object):
         return hash(self.in_.value + self.name)
 
     def __str__(self):
-        return "{} - {}".format(self.in_.value, self.name)
+        return "{} param {}".format(self.in_.value.title(), self.name)
 
     def __repr__(self):
         return "Param({!r}, {!r}, {!r}, {!r}, {!r})".format(self.name, self.in_, self.type, self.resource, self.options)
@@ -260,34 +295,25 @@ class Param(object):
         """
         Generate a swagger representation.
         """
-        resource = bound_resource if self.resource is DefaultResource else self.resource
-
-        param_def = dict_filter({
-            'name': self.name,
-            'in': self.in_.value,
-            'type': self.type.value if self.type else None,
-        }, self.options)
-
-        if self.description:
-            param_def['description'] = self.description.format(
-                name=getmeta(resource).name if resource else "UNKNOWN"
-            )
-
-        if resource:
-            param_def['schema'] = {
-                '$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)
-            }
-
-        return param_def
+        return _to_swagger(
+            {
+                'name': self.name,
+                'in': self.in_.value,
+                'type': self.type.value if self.type else None,
+            },
+            description=self.description,
+            resource=bound_resource if self.resource is DefaultResource else self.resource,
+            options=self.options
+        )
 
 
 class Response(object):
     """
-    Definition of a response.
+    Definition of a swagger response.
     """
     __slots__ = ('status', 'description', 'resource')
 
-    def __init__(self, status, description, resource=DefaultResource):
+    def __init__(self, status, description=None, resource=DefaultResource):
         # type: (HTTPStatus, str, Optional(Resource)) -> None
         self.status = status
         self.description = description
@@ -297,7 +323,11 @@ class Response(object):
         return hash(self.status)
 
     def __str__(self):
-        return "{} - {}".format(self.status.value, self.description)
+        description = self.description or self.status.description
+        if description:
+            return "{} {} - {}".format(self.status.value, self.status.phrase, description)
+        else:
+            return "{} {}".format(self.status.value, self.status.phrase)
 
     def __repr__(self):
         return "Response({!r}, {!r}, {!r})".format(self.status, self.description, self.resource)
@@ -306,21 +336,12 @@ class Response(object):
         """
         Generate a swagger representation.
         """
-        resource = bound_resource if self.resource is DefaultResource else self.resource
-
-        response_def = {'description': self.description.format(
-            name=getmeta(resource).name if resource else "UNKNOWN"
-        )}
-
-        if resource:
-            response_def['schema'] = {
-                '$ref': '#/definitions/{}'.format(getmeta(resource).resource_name)
-            }
-
-        if self.status == 'default':
-            return 'default', response_def
-        else:
-            return self.status.value, response_def
+        response_def = _to_swagger(
+            description=self.description,
+            resource=bound_resource if self.resource is DefaultResource else self.resource,
+        )
+        status = self.status if self.status == 'default' else self.status.value
+        return status, response_def
 
 
 class DefaultResponse(Response):
@@ -342,7 +363,7 @@ class MiddlewareList(list):
         List of pre-dispatch methods from registered middleware.
         """
         middleware = sort_by_priority(self)
-        return tuple(m.pre_dispatch for m in middleware if hasattr(m, 'pre_dispatch'))
+        return (m.pre_dispatch for m in middleware if hasattr(m, 'pre_dispatch'))
 
     @lazy_property
     def post_dispatch(self):
@@ -350,7 +371,7 @@ class MiddlewareList(list):
         List of post-dispatch methods from registered middleware.
         """
         middleware = sort_by_priority(self, reverse=True)
-        return tuple(m.post_dispatch for m in middleware if hasattr(m, 'post_dispatch'))
+        return (m.post_dispatch for m in middleware if hasattr(m, 'post_dispatch'))
 
     @lazy_property
     def post_swagger(self):
@@ -361,4 +382,4 @@ class MiddlewareList(list):
 
         """
         middleware = sort_by_priority(self)
-        return [m.post_swagger for m in middleware if hasattr(m, 'post_swagger')]
+        return (m.post_swagger for m in middleware if hasattr(m, 'post_swagger'))
