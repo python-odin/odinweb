@@ -8,7 +8,7 @@ A collection of decorators for identifying the various types of route.
 from __future__ import absolute_import
 
 # Imports for typing support
-from typing import Callable, Union, Tuple, Dict, Any, Optional, Generator, List  # noqa
+from typing import Callable, Union, Tuple, Dict, Any, Optional, Generator, List, Set  # noqa
 
 from odin import Resource
 from odin.utils import force_tuple, lazy_property
@@ -189,17 +189,17 @@ class Operation(object):
 
     @property
     def tags(self):
-        # type: () -> List[str]
+        # type: () -> Set[str]
         """
         Tags applied to operation.
         """
-        tags = []
+        tags = set()
         if self._tags:
-            tags.extend(self._tags)
+            tags.update(self._tags)
         if self.binding:
             binding_tags = getattr(self.binding, 'tags', None)
             if binding_tags:
-                tags.extend(binding_tags)
+                tags.update(binding_tags)
         return tags
 
 collection = collection_action = action = operation = Operation
