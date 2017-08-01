@@ -2,6 +2,22 @@ import pytest
 
 from odinweb import swagger
 
+from .resources import User
+
+
+def test_resource_definition():
+    actual = swagger.resource_definition(User)
+
+    assert actual == {
+        'type': 'object',
+        'properties': {
+            'id': {'type': 'integer', 'format': 'int64'},
+            'name': {'type': 'string'},
+            'email': {'type': 'string', 'description': 'Users email'},
+            'role': {'type': 'string', 'enum': ['admin', 'manager', 'user']},
+        }
+    }
+
 
 class TestSwaggerSpec(object):
     @pytest.mark.parametrize('options, title, enable_ui, host, schemes', (

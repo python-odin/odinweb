@@ -7,7 +7,12 @@ class User(odin.Resource):
 
     id = odin.IntegerField()
     name = odin.StringField()
-    email = odin.EmailField(null=True)
+    email = odin.EmailField(null=True, doc_text="Users email")
+    role = odin.StringField(null=True, choices=(
+        ('admin', 'Admin'),
+        ('manager', 'Manage'),
+        ('user', 'User'),
+    ))
 
 
 class Group(odin.Resource):

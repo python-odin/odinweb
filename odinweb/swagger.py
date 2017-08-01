@@ -39,10 +39,8 @@ Mapping of fields to Swagger types.
 """
 
 SWAGGER_SPEC_FORMAT_MAPPING = {
-    fields.StringField: '',
     fields.IntegerField: 'int64',
     fields.FloatField: 'float',
-    fields.BooleanField: '',
     fields.DateField: 'date',
     fields.DateTimeField: 'date-time',
     fields.NaiveTimeField: 'date-time',
@@ -70,14 +68,14 @@ def resource_definition(resource):
             'type': SWAGGER_SPEC_TYPE_MAPPING.get(field.__class__, Type.String).value
         }
 
-        if field in SWAGGER_SPEC_FORMAT_MAPPING:
-            field_definition['format'] = SWAGGER_SPEC_FORMAT_MAPPING[field]
+        if field.__class__ in SWAGGER_SPEC_FORMAT_MAPPING:
+            field_definition['format'] = SWAGGER_SPEC_FORMAT_MAPPING[field.__class__]
 
         if field.doc_text:
             field_definition['description'] = field.doc_text
 
         if field.choices:
-            field_definition['enum'] = field.choices
+            field_definition['enum'] = [c[0] for c in field.choices]
 
         definition['properties'][field.name] = field_definition
 
