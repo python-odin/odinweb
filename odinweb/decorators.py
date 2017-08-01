@@ -59,7 +59,7 @@ class Operation(object):
 
     def __init__(self, callback, url_path=NoPath, methods=Method.GET, resource=None, tags=None, summary=None,
                  middleware=None):
-        # type: (Callable, UrlPath, Union(Method, Tuple[Method]), Optional[Resource], Tags, Optional(str)) -> None
+        # type: (Callable, Union[UrlPath, str, PathNode], Union[Method, Tuple[Method]], Optional[Resource], Tags, Optional(str)) -> None
         """
         :param callback: Function we are routing
         :param url_path: A sub path that can be used as a action.
