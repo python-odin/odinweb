@@ -187,8 +187,8 @@ class SwaggerSpec(ResourceApi):
         """
         api_base = self.parent
         if not api_base:
-            raise HttpError(404, 40442, "Swagger not available.",
-                                "Swagger API is detached from a parent container.")
+            raise HttpError(HTTPStatus.NOT_FOUND, 42, "Swagger not available.",
+                            "Swagger API is detached from a parent container.")
 
         paths, definitions = self.parse_operations()
         return dict_filter({
@@ -208,17 +208,17 @@ class SwaggerSpec(ResourceApi):
 
     def load_static(self, file_name):
         if not self.enable_ui:
-            raise HttpError(404, 40401, "Not found")
+            raise HttpError(HTTPStatus.NOT_FOUND, 42)
 
         static_path = os.path.join(os.path.dirname(__file__), 'static')
         file_path = os.path.abspath(os.path.join(static_path, file_name))
         if not file_path.startswith(static_path):
-            raise HttpError(404, 40401, "Not found")
+            raise HttpError(HTTPStatus.NOT_FOUND, 42)
 
         try:
             return open(file_path, 'rb').read()
         except OSError:
-            raise HttpError(404, 40401, "Not found")
+            raise HttpError(HTTPStatus.NOT_FOUND, 42)
 
     @doc.response(HTTPStatus.OK, "HTML content")
     @doc.produces('text/html')
@@ -243,7 +243,7 @@ class SwaggerSpec(ResourceApi):
             'js': 'application/javascript',
         }.get(file_name[-2:])
         if not content_type:
-            raise ImmediateHttpResponse("Not Found", 404)
+            raise HttpError(HTTPStatus.NOT_FOUND, 42)
 
         return HttpResponse(self.load_static(file_name), headers={
             'Content-Type': content_type,
