@@ -7,6 +7,7 @@ from collections import defaultdict
 from odinweb import decorators
 from odinweb.constants import *
 from odinweb.data_structures import NoPath, Param
+from odinweb.exceptions import HttpError
 from odinweb.testing import MockRequest
 
 from .resources import User
@@ -162,6 +163,16 @@ class TestResourceOperation(object):
 
         request = MockRequest(body='{"id": 1, "name": "Stephen"}')
         my_func(request, {})
+
+    def test_execute__invalid(self):
+        @decorators.ResourceOperation(resource=User)
+        def my_func(request, user):
+            assert isinstance(user, User)
+            assert user.name == "Stephen"
+
+        request = MockRequest(body='{"id": 1, "name": "Stephen"')
+        with pytest.raises(HttpError):
+            my_func(request, {})
 
 
 # # @pytest.mark.parametrize('decorator, definition', (
