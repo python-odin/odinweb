@@ -117,6 +117,25 @@ class Operation(object):
 
         return response
 
+    def __eq__(self, other):
+        """
+        Compare to Operations to identify if they refer to the same endpoint.
+
+        Basically this means does the URL path and methods match?
+        """
+        if isinstance(other, Operation):
+            return all(
+                getattr(self, a) == getattr(other, a)
+                for a in ('url_path', 'methods')
+            )
+        return NotImplemented
+
+    def __str__(self):
+        return "{} - {} {}".format(self.operation_id, '|'.join(m.value for m in self.methods), self.url_path)
+
+    def __repr__(self):
+        return "Operation({!r}, {!r}, {})".format(self.operation_id, self.url_path, self.methods)
+
     def execute(self, request, *args, **path_args):
         # type: (HttpRequest, tuple, Dict[Any]) -> Any
         """
