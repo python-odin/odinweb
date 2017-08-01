@@ -1,0 +1,16 @@
+language: python
+sudo: false
+python:
+  - "2.7"
+  - "3.5"
+  - "3.6"
+
+install:
+  - travis_retry pip install -r requirements-dev.txt
+  - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then travis_retry pip install -r requirements-2.7.txt; fi
+
+script:
+  - py.test tests/ --cov=odinweb
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
