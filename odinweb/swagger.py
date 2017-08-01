@@ -27,7 +27,7 @@ from . import resources
 from ._compat import binary_type
 from .constants import HTTPStatus, Method, Type
 from .containers import ResourceApi, CODECS
-from .data_structures import PathNode, UrlPath, Param, HttpResponse
+from .data_structures import PathParam, UrlPath, Param, HttpResponse
 from .decorators import Operation
 from .exceptions import HttpError, ImmediateHttpResponse
 from .utils import dict_filter
@@ -99,7 +99,7 @@ class SwaggerSpec(ResourceApi):
                 SwaggerSpec.get_ui, UrlPath.parse('ui'), Method.GET,
             ))
             self._operations.append(Operation(
-                SwaggerSpec.get_static, UrlPath('ui', PathNode('file_name', Type.String))
+                SwaggerSpec.get_static, UrlPath('ui', PathParam('file_name', Type.String))
             ))
 
         super(SwaggerSpec, self).__init__()
@@ -137,7 +137,7 @@ class SwaggerSpec(ResourceApi):
 
     @staticmethod
     def swagger_node_formatter(path_node):
-        # type: (PathNode) -> str
+        # type: (PathParam) -> str
         """
         Format a node for swagger spec (default formatter for the format method).
         """
