@@ -132,6 +132,9 @@ class UrlPath(object):
         # type: (*Union(str, PathNode)) -> None
         self._nodes = nodes
 
+    def __hash__(self):
+        return hash(str(self))
+
     def __str__(self):
         return self.format()
 
