@@ -7,7 +7,7 @@ from odinweb import api
 from odinweb import containers
 from odinweb._compat.http import HTTPStatus
 from odinweb.constants import Method
-from odinweb.data_structures import NoPath, UrlPath, PathNode, HttpResponse
+from odinweb.data_structures import NoPath, UrlPath, HttpResponse
 from odinweb.decorators import Operation
 from odinweb.helpers import create_response
 from odinweb.testing import MockRequest
@@ -89,7 +89,7 @@ class TestResourceApiMeta(object):
 
         assert ExampleApi._operations == [
             Operation(mock_callback, NoPath, Method.GET),
-            Operation(mock_callback, UrlPath(PathNode('resource_id')), Method.GET),
+            Operation(mock_callback, '{resource_id}', Method.GET),
             Operation(mock_callback, NoPath, (Method.POST, Method.PUT)),
         ]
 
@@ -112,7 +112,7 @@ class TestResourceApiMeta(object):
 
         assert SubApi._operations == [
             Operation(mock_callback, NoPath, Method.GET),
-            Operation(mock_callback, UrlPath(PathNode('resource_id')), Method.GET),
+            Operation(mock_callback, '{resource_id}', Method.GET),
             Operation(mock_callback, NoPath, (Method.POST, Method.PUT)),
         ]
 
@@ -139,8 +139,8 @@ class TestResourceApi(object):
 
         assert actual == {
             UrlPath.parse('user'): Operation(mock_callback, NoPath, methods=Method.GET),
-            UrlPath('user', PathNode('resource_id')): Operation(mock_callback, UrlPath(PathNode('resource_id')), methods=Method.GET),
-            UrlPath.parse('user/start'): Operation(mock_callback, UrlPath.parse('start'), methods=Method.POST),
+            UrlPath.parse('user/{resource_id}'): Operation(mock_callback, '{resource_id}', methods=Method.GET),
+            UrlPath.parse('user/start'): Operation(mock_callback, 'start', methods=Method.POST),
         }
 
 
