@@ -175,22 +175,18 @@ class TestResourceOperation(object):
             my_func(request, {})
 
 
-# # @pytest.mark.parametrize('decorator, definition', (
-# #     (decorators.route, (PathType.Collection, (Method.GET.value,), None)),
-# #     (decorators.resource_route, (PathType.Resource, (Method.GET.value,), None)),
-# #     (decorators.listing, (PathType.Collection, (Method.GET.value,), None)),
-# #     (decorators.create, (PathType.Collection, (Method.POST.value,), None)),
-# #     (decorators.detail, (PathType.Resource, (Method.GET.value,), None)),
-# #     (decorators.update, (PathType.Resource, (Method.PUT.value,), None)),
-# #     (decorators.patch, (PathType.Resource, (Method.PATCH.value,), None)),
-# #     (decorators.delete, (PathType.Resource, (Method.DELETE.value,), None)),
-# # ))
-# # def test_endpoint_decorators(decorator, definition):
-# #     @decorator
-# #     def target(self, request):
-# #         pass
-# #
-# #     assert isinstance(target.route, decorators.RouteDefinition)
-# #     assert target.route.route_number == decorators._route_count - 1
-# #     assert target.route[1:-1] == definition
-# #     assert target.route[-1] == target
+@pytest.mark.parametrize('decorator, klass, method', (
+    (decorators.listing, decorators.ListOperation, Method.GET),
+    (decorators.create, decorators.ResourceOperation, Method.POST),
+    (decorators.detail, decorators.Operation, Method.GET),
+    (decorators.update, decorators.ResourceOperation, Method.PUT),
+    (decorators.patch, decorators.ResourceOperation, Method.PATCH),
+    (decorators.delete, decorators.Operation, Method.DELETE),
+))
+def test_endpoint_decorators(decorator, klass, method):
+    @decorator
+    def target(request):
+        pass
+
+    assert isinstance(target, klass)
+    assert target.methods == (method,)
