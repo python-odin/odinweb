@@ -192,14 +192,14 @@ class Operation(object):
         """
         return dict_filter(
             operationId=self.operation_id,
-            description=(self.callback.__doc__ or '').strip(),
-            summary=self.summary,
-            tags=self.tags if self.tags else None,
-            deprecated=True if self.deprecated else None,
-            consumes=self.consumes if self.consumes else None,
-            parameters=[param.to_swagger(self.resource) for param in self.parameters],
-            produces=list(self.produces) if self.produces else None,
-            responses=dict(resp.to_swagger(self.resource) for resp in self.responses) if self.responses else None,
+            description=(self.callback.__doc__ or '').strip() or None,
+            summary=self.summary or None,
+            tags=list(self.tags) or None,
+            deprecated=self.deprecated or None,
+            consumes=list(self.consumes) or None,
+            parameters=[param.to_swagger(self.resource) for param in self.parameters] or None,
+            produces=list(self.produces) or None,
+            responses=dict(resp.to_swagger(self.resource) for resp in self.responses) or None,
         )
 
     @lazy_property
