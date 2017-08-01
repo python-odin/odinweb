@@ -318,13 +318,18 @@ class Param(object):
         self.options = dict_filter(**options)
 
     def __hash__(self):
-        return hash(self.in_.value + self.name)
+        return hash(self.in_.value + ':' + self.name)
 
     def __str__(self):
         return "{} param {}".format(self.in_.value.title(), self.name)
 
     def __repr__(self):
         return "Param({!r}, {!r}, {!r}, {!r}, {!r})".format(self.name, self.in_, self.type, self.resource, self.options)
+
+    def __eq__(self, other):
+        if isinstance(other, Param):
+            return hash(self) == hash(other)
+        return NotImplemented
 
     def to_swagger(self, bound_resource=None):
         """
@@ -366,6 +371,11 @@ class Response(object):
 
     def __repr__(self):
         return "Response({!r}, {!r}, {!r})".format(self.status, self.description, self.resource)
+
+    def __eq__(self, other):
+        if isinstance(other, Response):
+            return hash(self) == hash(other)
+        return NotImplemented
 
     def to_swagger(self, bound_resource=None):
         """
