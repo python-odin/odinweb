@@ -95,6 +95,29 @@ class TestOperation(object):
         assert actual == 'foo'
         assert api.call_count == {'pre_dispatch': 1, 'post_dispatch': 1}
 
+    @pytest.mark.parametrize('decorator, init_args, expected', (
+        (decorators.Operation, {}, {}),
+        (decorators.Operation, {'tags': 'foo'}, {'tags': ['foo']}),
+    ))
+    def test_to_doc(self, decorator, init_args, expected):
+        @decorator(**init_args)
+        def my_func(request):
+            """
+            My Func
+            """
+            pass
+
+        # Set some common defaults
+        expected.setdefault('operationId', 'tests.test_decorators.my_func')
+        expected.setdefault('description', 'My Func')
+        expected.setdefault('responses', {'default': {
+            'description': 'Unhandled error',
+            'schema': {'$ref': '#/definitions/Error'}
+        }})
+
+        actual = my_func.to_doc()
+        assert actual == expected
+
 
 class TestListOperation(object):
     @pytest.mark.parametrize('options, offset, limit', (
@@ -103,7 +126,7 @@ class TestListOperation(object):
     ))
     def test_documentation_applied(self, options, offset, limit):
         @decorators.listing(**options)
-        def my_func():
+        def my_func(request):
             pass
 
         assert my_func.default_offset == offset
@@ -120,6 +143,8 @@ class TestListOperation(object):
         # Max offset/limit
         ({'max_limit': 100}, {}, 0, 50, False),
         ({'max_limit': 100}, {'offset': 10, 'limit': 100}, 10, 100, False),
+        ({'max_limit': 100}, {'offset': 10, 'limit': 102}, 10, 100, False),
+        ({'max_limit': 100, 'max_offset': 10}, {'offset': 12, 'limit': 100}, 10, 100, False),
         # Silly values?
         ({}, {'offset': -1}, 0, 50, False),
         ({}, {'limit': -1}, 0, 1, False),
@@ -129,7 +154,7 @@ class TestListOperation(object):
     def test_options_handled(self, options, query, offset, limit, bare):
         mock_request = MockRequest(query=query)
 
-        @decorators.listing(**options)
+        @decorators.ListOperation(**options)
         def my_func(request, **kwargs):
             assert request is mock_request
             assert kwargs['offset'] == offset
@@ -151,7 +176,7 @@ class TestListOperation(object):
     def test_returning_total_count(self):
         mock_request = MockRequest()
 
-        @decorators.listing
+        @decorators.ListOperation
         def my_func(request, foo, offset, limit):
             assert foo == 'bar'
             assert offset == 0
