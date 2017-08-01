@@ -5,7 +5,7 @@ API Containers
 Containers that provide structure to an API.
 
 """
-from __future__ import absolute_import, unicode_literals
+from __future__ import absolute_import
 
 import logging
 
