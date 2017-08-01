@@ -25,6 +25,26 @@ class TestOperation(object):
         assert target.url_path is NoPath
         assert target.methods == (Method.GET,)
 
+    def test_str(self):
+        @decorators.Operation(url_path="test/{id}/start")
+        def target(request):
+            """
+            Test target
+            """
+
+        assert "tests.test_decorators.target - GET test/{id:integer}/start" == str(target)
+
+    def test_repr(self):
+        @decorators.Operation(url_path="test/{id}/start")
+        def target(request):
+            """
+            Test target
+            """
+
+        assert "Operation('tests.test_decorators.target', " \
+               "UrlPath('test', PathParam(name='id', type=<Type.Integer: 'integer'>, type_args=None), 'start'), " \
+               "(<Method.GET: 'GET'>,))" == repr(target)
+
     def test_unbound(self):
         @decorators.Operation(tags=('eek', 'bar'))
         def target(request):
