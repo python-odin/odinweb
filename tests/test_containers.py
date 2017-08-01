@@ -307,7 +307,7 @@ class TestApiInterfaceBase(object):
         target = containers.ApiInterfaceBase(debug_enabled=True)
         operation = Operation(callback)
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(TypeError):
             target.dispatch(operation, MockRequest())
 
     def test_dispatch__http_response(self):
