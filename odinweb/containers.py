@@ -192,7 +192,7 @@ class ApiContainer(object):
         return inner(func) if func else inner
 
     def op_paths(self, path_base=None):
-        # type: (Optional[Union[str, UrlPath]]) -> List[Operation]
+        # type: (Optional[Union[str, UrlPath]]) -> List[Tuple[UrlPath, Operation]]
         """
         Return all operations stored in containers.
         """
@@ -213,15 +213,6 @@ class ApiCollection(ApiContainer):
     A collection of API endpoints
     """
     parent = None
-
-    @property
-    def debug_enabled(self):
-        """
-        Is debugging enabled?
-        """
-        if self.parent:
-            return self.parent.debug_enabled
-        return False
 
 
 class ApiVersion(ApiCollection):
