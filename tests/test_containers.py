@@ -1,14 +1,16 @@
 from __future__ import absolute_import
 
-import mock
 import pytest
 
+from odin.exceptions import ValidationError
 from odinweb import api
 from odinweb import containers
+from odinweb._compat.http import HTTPStatus
 from odinweb.constants import Method
-from odinweb.data_structures import NoPath, UrlPath, PathNode
+from odinweb.data_structures import NoPath, UrlPath, PathNode, HttpResponse
 from odinweb.decorators import Operation
 from odinweb.helpers import create_response
+from odinweb.testing import MockRequest
 
 from .resources import User
 
@@ -233,107 +235,92 @@ class TestApiInterfaceBase(object):
         with pytest.raises(ValueError):
             containers.ApiInterfaceBase(path_prefix='ab/c')
 
-# #     @pytest.mark.parametrize('r, status, message', (
-# #         (MockRequest(headers={'content-type': 'application/xml', 'accepts': 'application/json'}),
-# #          422, 'Unprocessable Entity'),
-# #         (MockRequest(headers={'content-type': 'application/json', 'accepts': 'application/xml'}),
-# #          406, 'URI not available in preferred format'),
-# #         (MockRequest('POST'), 405, 'Specified method is invalid for this resource'),
-# #     ))
-# #     def test_wrap_callback__invalid_headers(self, r, status, message):
-# #         def callback(s, request):
-# #             pass
-# #
-# #         target = UserApi()
-# #         wrapper = target._wrap_callback(callback, ['GET'])
-# #         actual = wrapper(r)
-# #
-# #         assert actual.status == status
-# #         assert actual.body == message
-# #
-# #     @pytest.mark.parametrize('error,status', (
-# #         (api.ImmediateHttpResponse(None, 330, {}), 330),
-# #         (ValidationError("Error"), 400),
-# #         (ValidationError({}), 400),
-# #         (NotImplementedError, 501),
-# #         (ValueError, 500)
-# #     ))
-# #     def test_wrap_callback__exceptions(self, error, status):
-# #         def callback(s, request):
-# #             raise error
-# #
-# #         target = UserApi()
-# #         wrapper = target._wrap_callback(callback, ['GET'])
-# #         actual = wrapper(MockRequest())
-# #
-# #         assert actual.status == status
-# #
-# #     def test_dispatch__with_authorisation(self):
-# #         class AuthorisedUserApi(UserApi):
-# #             def handle_authorisation(self, request):
-# #                 self.calls.append('handle_authorisation')
-# #
-# #         target = AuthorisedUserApi()
-# #         result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
-# #
-# #         assert 'handle_authorisation' in target.calls
-# #         assert result == {"a": "b"}
-# #
-# #     def test_dispatch__with_pre_dispatch(self):
-# #         class AuthorisedUserApi(UserApi):
-# #             def pre_dispatch(self, request, **path_args):
-# #                 self.calls.append('pre_dispatch')
-# #
-# #         target = AuthorisedUserApi()
-# #         result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
-# #
-# #         assert 'pre_dispatch' in target.calls
-# #         assert 'mock_callback' in target.calls
-# #         assert result == {"a": "b"}
-# #
-# #     def test_dispatch__with_pre_dispatch_modify_path_args(self):
-# #         class AuthorisedUserApi(UserApi):
-# #             def pre_dispatch(self, request, **path_args):
-# #                 self.calls.append('pre_dispatch')
-# #                 return {}
-# #
-# #         target = AuthorisedUserApi()
-# #         result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
-# #
-# #         assert 'pre_dispatch' in target.calls
-# #         assert 'mock_callback' in target.calls
-# #         assert result == {}
-# #
-# #     def test_dispatch__with_post_dispatch(self):
-# #         class AuthorisedUserApi(UserApi):
-# #             def post_dispatch(self, request, result):
-# #                 self.calls.append('post_dispatch')
-# #                 result['c'] = 'd'
-# #                 return result
-# #
-# #         target = AuthorisedUserApi()
-# #         result = target.dispatch(UserApi.mock_callback, MockRequest(), a="b")
-# #
-# #         assert 'post_dispatch' in target.calls
-# #         assert 'mock_callback' in target.calls
-# #         assert result == {"a": "b", "c": "d"}
-# #
-# #
-# #     @pytest.mark.parametrize('value, body, status', (
-# #         (None, None, 204),
-# #         ('abc', '"abc"', 200),
-# #         (123, '123', 200),
-# #         ([], None, 204),
-# #         ([1, 2, 3], '[1, 2, 3]', 200),
-# #         (set("123"), 'Error encoding response.', 500),
-# #     ))
-# #     def test_create_response(self, value, body, status):
-# #         target = UserApi()
-# #         request = MockRequest()
-# #
-# #         actual = target.create_response(request, value)
-# #         assert actual.body == body
-# #         assert actual.status == status
+    def test_dispatch(self):
+        pass
+
+    @pytest.mark.parametrize('r, status, message', (
+        (MockRequest(headers={'content-type': 'application/xml', 'accepts': 'application/json'}),
+         422, 'Unprocessable Entity'),
+        (MockRequest(headers={'content-type': 'application/json', 'accepts': 'application/xml'}),
+         406, 'URI not available in preferred format'),
+        (MockRequest(method=Method.POST), 405, 'Specified method is invalid for this resource'),
+    ))
+    def test_dispatch__invalid_headers(self, r, status, message):
+        target = containers.ApiInterfaceBase()
+        operation = Operation(mock_callback)
+        actual = target.dispatch(operation, r)
+
+        assert actual.status == status
+        assert actual.body == message
+
+    @pytest.mark.parametrize('error,status', (
+        (api.ImmediateHttpResponse(None, HTTPStatus.NOT_MODIFIED, {}), HTTPStatus.NOT_MODIFIED),
+        (ValidationError("Error"), 400),
+        (ValidationError({}), 400),
+        (NotImplementedError, 501),
+        (ValueError, 500),
+        (api.ImmediateHttpResponse(ValueError, HTTPStatus.NOT_MODIFIED, {}), 500),
+    ))
+    def test_dispatch__exceptions(self, error, status):
+        def callback(request):
+            raise error
+
+        target = containers.ApiInterfaceBase()
+        operation = Operation(callback)
+        actual = target.dispatch(operation, MockRequest())
+
+        assert actual.status == status
+
+    def test_dispatch__with_middleware(self):
+        class Middleware(object):
+            def pre_dispatch(self, request, path_args):
+                path_args['foo'] = 'bar'
+
+            def post_dispatch(self, request, response):
+                return 'eek' + response
+
+        def callback(request, **args):
+            assert args['foo'] == 'bar'
+            return 'boo'
+
+        target = containers.ApiInterfaceBase(middleware=[Middleware()])
+        operation = Operation(callback)
+        actual = target.dispatch(operation, MockRequest())
+
+        assert actual.body == '"eekboo"'
+        assert actual.status == 200
+
+    def test_dispatch__error_with_debug_enabled(self):
+        def callback(request):
+            raise ValueError()
+
+        target = containers.ApiInterfaceBase(debug_enabled=True)
+        operation = Operation(callback)
+
+        with pytest.raises(ValueError):
+            target.dispatch(operation, MockRequest())
+
+    def test_dispatch__encode_error_with_debug_enabled(self):
+        def callback(request):
+            raise api.ImmediateHttpResponse(ValueError, HTTPStatus.NOT_MODIFIED, {})
+
+        target = containers.ApiInterfaceBase(debug_enabled=True)
+        operation = Operation(callback)
+
+        with pytest.raises(RuntimeError):
+            target.dispatch(operation, MockRequest())
+
+    def test_dispatch__http_response(self):
+        def callback(request):
+            return HttpResponse("eek")
+
+        target = containers.ApiInterfaceBase()
+        operation = Operation(callback)
+        actual = target.dispatch(operation, MockRequest())
+
+        assert actual.body == 'eek'
+        assert actual.status == 200
+
 
 # # def test_nested_api():
 # #     user_api = UserApi()
