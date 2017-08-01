@@ -146,6 +146,24 @@ class TestListOperation(object):
         assert result.total_count == 5
 
 
+class TestResourceOperation(object):
+    def test_documentation_applied(self):
+        @decorators.ResourceOperation(resource=User)
+        def my_func(request, user):
+            pass
+
+        assert Param.body() in my_func.parameters
+
+    def test_execute(self):
+        @decorators.ResourceOperation(resource=User)
+        def my_func(request, user):
+            assert isinstance(user, User)
+            assert user.name == "Stephen"
+
+        request = MockRequest(body='{"id": 1, "name": "Stephen"}')
+        my_func(request, {})
+
+
 # # @pytest.mark.parametrize('decorator, definition', (
 # #     (decorators.route, (PathType.Collection, (Method.GET.value,), None)),
 # #     (decorators.resource_route, (PathType.Resource, (Method.GET.value,), None)),
