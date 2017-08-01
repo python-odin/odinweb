@@ -14,11 +14,7 @@ from .constants import HTTPStatus
 from .data_structures import Param, Response, DefaultResource
 from .utils import make_decorator
 
-__all__ = (
-    'deprecated',
-    'query_param', 'path_param', 'body', 'header_param',
-    'response', 'produces'
-)
+__all__ = ('deprecated', 'add_param', 'response', 'produces')
 
 
 @make_decorator
@@ -37,7 +33,7 @@ def add_param(operation, param):
     :meth:`body_param`, or :meth:`header_param`.
     """
     try:
-        getattr(operation, 'parameters').append(param)
+        getattr(operation, 'parameters').add(param)
     except AttributeError:
         setattr(operation, 'parameters', {param})
 
@@ -54,7 +50,7 @@ def response(operation, status, description, resource=DefaultResource):
     value = Response(status, description, resource)
 
     try:
-        getattr(operation, 'responses').update(value)
+        getattr(operation, 'responses').add(value)
     except AttributeError:
         setattr(operation, 'responses', {value})
 
@@ -70,4 +66,4 @@ def produces(operation, *content_types):
     try:
         getattr(operation, 'produces').update(content_types)
     except AttributeError:
-        setattr(operation, 'parameters', set(content_types))
+        setattr(operation, 'produces', set(content_types))
