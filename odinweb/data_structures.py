@@ -1,16 +1,19 @@
+from __future__ import absolute_import
+
+import re
+
 from collections import namedtuple
+from odin.utils import getmeta, lazy_property, force_tuple
 
 # Imports for typing support
 from typing import Dict, Union, Optional, Callable, Any, AnyStr  # noqa
 from odin import Resource  # noqa
 
-from odin.utils import getmeta, lazy_property, force_tuple
-
 from . import _compat
 from .constants import HTTPStatus, In, Type
 from .utils import dict_filter, sort_by_priority
 
-__all__ = ('DefaultResource', 'HttpResponse', 'UrlPath', 'PathNode', 'NoPath', 'Param', 'Response')
+__all__ = ('DefaultResource', 'HttpResponse', 'UrlPath', 'PathParam', 'NoPath', 'Param', 'Response')
 
 
 class DefaultResource(object):
@@ -60,8 +63,8 @@ class HttpResponse(object):
 
 
 # Used to define path nodes
-PathNode = namedtuple('PathNode', 'name type type_args')
-PathNode.__new__.__defaults__ = (None, Type.Integer, None)
+PathParam = namedtuple('PathParam', 'name type type_args')
+PathParam.__new__.__defaults__ = (None, Type.Integer, None)
 
 
 def _add_nodes(a, b):
@@ -96,6 +99,9 @@ def _to_swagger(base=None, description=None, resource=None, options=None):
     return definition
 
 
+PATH_NODE_RE = re.compile(r'^{([\w_]+)(?::([\w_]+))?}$')
+
+
 class UrlPath(object):
     """
     Object that represents a URL path.
@@ -114,7 +120,7 @@ class UrlPath(object):
             return obj
         if isinstance(obj, _compat.string_types):
             return UrlPath.parse(obj)
-        if isinstance(obj, PathNode):
+        if isinstance(obj, PathParam):
             return UrlPath(obj)
         if isinstance(obj, (tuple, list)):
             return UrlPath(*obj)
@@ -126,10 +132,36 @@ class UrlPath(object):
         """
         Parse a string into a URL path (simple eg does not support typing of URL parameters)
         """
-        return cls(*url_path.rstrip('/').split('/')) if url_path else cls()
+        if not url_path:
+            return cls()
+
+        nodes = []
+        for node in url_path.rstrip('/').split('/'):
+            # Identifies a PathNode
+            if '{' in node or '}' in node:
+                m = PATH_NODE_RE.match(node)
+                if not m:
+                    raise ValueError("Invalid path param: {}".format(node))
+
+                # Parse out name and type
+                name = m.group(1)
+                param_type = m.group(2)
+                if param_type:
+                    try:
+                        path_param = PathParam(name, Type[param_type])
+                    except KeyError:
+                        raise ValueError("Unknown param type `{}` in: {}".format(param_type, node))
+                else:
+                    path_param = PathParam(name)
+
+                nodes.append(path_param)
+            else:
+                nodes.append(node)
+
+        return cls(*nodes)
 
     def __init__(self, *nodes):
-        # type: (*Union(str, PathNode)) -> None
+        # type: (*Union(str, PathParam)) -> None
         self._nodes = nodes
 
     def __hash__(self):
@@ -145,20 +177,20 @@ class UrlPath(object):
         )
 
     def __add__(self, other):
-        # type: (Union[UrlPath, str, PathNode]) -> UrlPath
+        # type: (Union[UrlPath, str, PathParam]) -> UrlPath
         if isinstance(other, UrlPath):
             return UrlPath(*_add_nodes(self._nodes, other._nodes))  # pylint:disable=protected-access
         if isinstance(other, _compat.string_types):
             return self + UrlPath.parse(other)
-        if isinstance(other, PathNode):
+        if isinstance(other, PathParam):
             return UrlPath(*_add_nodes(self._nodes, (other,)))
         return NotImplemented
 
     def __radd__(self, other):
-        # type: (Union[str, PathNode]) -> UrlPath
+        # type: (Union[str, PathParam]) -> UrlPath
         if isinstance(other, _compat.string_types):
             return UrlPath.parse(other) + self
-        if isinstance(other, PathNode):
+        if isinstance(other, PathParam):
             return UrlPath(*_add_nodes((other,), self._nodes))
         return NotImplemented
 
@@ -185,11 +217,11 @@ class UrlPath(object):
         """
         Return iterator of PathNode items
         """
-        return (n for n in self._nodes if isinstance(n, PathNode))
+        return (n for n in self._nodes if isinstance(n, PathParam))
 
     @staticmethod
     def odinweb_node_formatter(path_node):
-        # type: (PathNode) -> str
+        # type: (PathParam) -> str
         """
         Format a node to be consumable by the `UrlPath.parse`.
         """
@@ -198,7 +230,7 @@ class UrlPath(object):
         return "{{{}}}".format(path_node.name)
 
     def format(self, node_formatter=None):
-        # type: (Optional[Callable[[PathNode], str]]) -> str
+        # type: (Optional[Callable[[PathParam], str]]) -> str
         """
         Format a URL path.
         
@@ -210,7 +242,7 @@ class UrlPath(object):
             return '/'
         else:
             node_formatter = node_formatter or self.odinweb_node_formatter
-            return '/'.join(node_formatter(n) if isinstance(n, PathNode) else n for n in self._nodes)
+            return '/'.join(node_formatter(n) if isinstance(n, PathParam) else n for n in self._nodes)
 
 NoPath = UrlPath()
 

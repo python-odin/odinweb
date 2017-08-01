@@ -3,7 +3,7 @@ from __future__ import absolute_import
 import pytest
 import sys
 
-from odinweb.data_structures import HttpResponse, UrlPath, PathNode, _to_swagger, Param, Response, DefaultResponse, \
+from odinweb.data_structures import HttpResponse, UrlPath, PathParam, _to_swagger, Param, Response, DefaultResponse, \
     MiddlewareList
 from odinweb.constants import Type, HTTPStatus, In
 
@@ -73,7 +73,7 @@ class TestUrlPath(object):
     @pytest.mark.parametrize('obj, expected', (
         (UrlPath('', 'foo'), ('', 'foo')),
         ('/foo', ('', 'foo')),
-        (PathNode('name'), (PathNode('name'),)),
+        (PathParam('name'), (PathParam('name'),)),
         (('', 'foo'), ('', 'foo')),
     ))
     def test_from_object(self, obj, expected):
@@ -98,21 +98,31 @@ class TestUrlPath(object):
         ('a/b', ('a', 'b')),
         ('/a/b', ('', 'a', 'b')),
         ('/a/b/', ('', 'a', 'b')),
-        ('a/{b}/c', ('a', PathNode('b'), 'c')),
-        ('a/{b:integer}/c', ('a', PathNode('b', Type.Integer), 'c')),
+        ('a/{b}/c', ('a', PathParam('b'), 'c')),
+        ('a/{b:Integer}/c', ('a', PathParam('b', Type.Integer), 'c')),
     ))
     def test_parse(self, path, expected):
         target = UrlPath.parse(path)
-
         assert target._nodes == expected
+
+    @pytest.mark.parametrize('path', (
+        'a/{b/c',
+        'a/b}/c',
+        'a/{b:}/c',
+        'a/{b:int}/c',
+        'a/{b:eek}/c',
+    ))
+    def test_parse__raises_error(self, path):
+        with pytest.raises(ValueError):
+            UrlPath.parse(path)
 
     @pytest.mark.parametrize('path, expected', (
         (('',), '/'),
         (('a',), 'a'),
         (('', 'a'), '/a'),
         (('', 'a', 'b'), '/a/b'),
-        (('', 'a', PathNode('b', None), 'c'), '/a/{b}/c'),
-        (('', 'a', PathNode('b', Type.String), 'c'), '/a/{b:string}/c'),
+        (('', 'a', PathParam('b', None), 'c'), '/a/{b}/c'),
+        (('', 'a', PathParam('b', Type.String), 'c'), '/a/{b:string}/c'),
     ))
     def test_str(self, path, expected):
         target = UrlPath(*path)
@@ -125,10 +135,10 @@ class TestUrlPath(object):
         (UrlPath.parse('/a/b'), UrlPath.parse('c/d'), ('', 'a', 'b', 'c', 'd')),
         (UrlPath.parse('/a/b'), 'c', ('', 'a', 'b', 'c')),
         (UrlPath.parse('/a/b'), 'c/d', ('', 'a', 'b', 'c', 'd')),
-        (UrlPath.parse('/a/b'), PathNode('c'), ('', 'a', 'b', PathNode('c'))),
+        (UrlPath.parse('/a/b'), PathParam('c'), ('', 'a', 'b', PathParam('c'))),
         ('c', UrlPath.parse('a/b'), ('c', 'a', 'b')),
         ('c/d', UrlPath.parse('a/b'), ('c', 'd', 'a', 'b')),
-        (PathNode('c'), UrlPath.parse('a/b'),  (PathNode('c'), 'a', 'b')),
+        (PathParam('c'), UrlPath.parse('a/b'), (PathParam('c'), 'a', 'b')),
     ))
     def test_add(self, a, b, expected):
         actual = a + b
@@ -137,7 +147,7 @@ class TestUrlPath(object):
     @pytest.mark.parametrize('a, b', (
         (UrlPath.parse('a/b/c'), UrlPath.parse('/d')),
         ('a/b/c', UrlPath.parse('/d')),
-        (PathNode('c'), UrlPath.parse('/d')),
+        (PathParam('c'), UrlPath.parse('/d')),
         (UrlPath.parse('/d'), 1),
         (1, UrlPath.parse('/d')),
     ))
@@ -179,8 +189,8 @@ class TestUrlPath(object):
 
     @pytest.mark.parametrize('args, expected', (
         (('a', 'b', 'c'), ()),
-        (('a', PathNode('b'), 'c'), (PathNode('b'),)),
-        (('a', PathNode('b'), PathNode('c')), (PathNode('b'), PathNode('c'))),
+        (('a', PathParam('b'), 'c'), (PathParam('b'),)),
+        (('a', PathParam('b'), PathParam('c')), (PathParam('b'), PathParam('c'))),
     ))
     def test_path_nodes(self, args, expected):
         target = UrlPath(*args)
@@ -188,9 +198,9 @@ class TestUrlPath(object):
         assert actual == expected
 
     @pytest.mark.parametrize('path_node, expected', (
-        (PathNode('name'), '{name:integer}'),
-        (PathNode('name', Type.String), '{name:string}'),
-        (PathNode('name', None, None), '{name}'),
+        (PathParam('name'), '{name:integer}'),
+        (PathParam('name', Type.String), '{name:string}'),
+        (PathParam('name', None, None), '{name}'),
     ))
     def test_odinweb_node_formatter(self, path_node, expected):
         assert UrlPath.odinweb_node_formatter(path_node) == expected
@@ -198,10 +208,10 @@ class TestUrlPath(object):
     @pytest.mark.parametrize('url_path, formatter, expected', (
         (UrlPath('a', 'b', 'c'), None, 'a/b/c'),
         (UrlPath('', 'a', 'b', 'c'), None, '/a/b/c'),
-        (UrlPath('', 'a', PathNode('b'), 'c'), None, '/a/{b:integer}/c'),
-        (UrlPath('', 'a', PathNode('b', None), 'c'), None, '/a/{b}/c'),
-        (UrlPath('', 'a', PathNode('b', Type.String), 'c'), None, '/a/{b:string}/c'),
-        (UrlPath('', 'a', PathNode('b', Type.String), 'c'), UrlPath.odinweb_node_formatter, '/a/{b:string}/c'),
+        (UrlPath('', 'a', PathParam('b'), 'c'), None, '/a/{b:integer}/c'),
+        (UrlPath('', 'a', PathParam('b', None), 'c'), None, '/a/{b}/c'),
+        (UrlPath('', 'a', PathParam('b', Type.String), 'c'), None, '/a/{b:string}/c'),
+        (UrlPath('', 'a', PathParam('b', Type.String), 'c'), UrlPath.odinweb_node_formatter, '/a/{b:string}/c'),
     ))
     def test_format(self, url_path, formatter, expected):
         actual = url_path.format(formatter)
