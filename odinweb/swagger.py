@@ -25,11 +25,11 @@ from odin.utils import getmeta, lazy_property
 from . import doc
 from . import resources
 from ._compat import binary_type
-from .constants import HTTPStatus, Method, Type
+from .constants import HTTPStatus, Type
 from .containers import ResourceApi, CODECS
-from .data_structures import PathParam, UrlPath, Param, HttpResponse
+from .data_structures import PathParam, UrlPath, Param, HttpResponse, NoPath
 from .decorators import Operation
-from .exceptions import HttpError, ImmediateHttpResponse
+from .exceptions import HttpError
 from .utils import dict_filter
 
 
@@ -90,18 +90,20 @@ class SwaggerSpec(ResourceApi):
     SWAGGER_TAG = 'swagger'
     tags = (SWAGGER_TAG, )
 
-    def __init__(self, title, enable_ui=False, host=None, schemes=None):
-        # Register UI routes
-        if enable_ui:
-            self._operations.append(Operation(
-                SwaggerSpec.get_ui, UrlPath.parse('ui'), Method.GET,
-            ))
-            self._operations.append(Operation(
-                SwaggerSpec.get_static, UrlPath('ui', PathParam('file_name', Type.String))
-            ))
+    static_path = os.path.join(os.path.dirname(__file__), 'static')
+
+    def __init__(self, title, enabled=True, enable_ui=False, host=None, schemes=None):
+        # Register operations
+        if enabled:
+            self._opertions.append(Operation(SwaggerSpec.get_swagger)
+)
+            if enable_ui:
+                self._operations.append(Operation(SwaggerSpec.get_ui, UrlPath.parse('ui')))
+                self._operations.append(Operation(SwaggerSpec.get_static, UrlPath.parse('ui/{file_name:String}')))
 
         super(SwaggerSpec, self).__init__()
         self.title = title
+        self.enabled = enabled
         self.enable_ui = enable_ui
         self.host = host
         self.schemes = schemes
@@ -118,8 +120,8 @@ class SwaggerSpec(ResourceApi):
         # Walk up the API to find the base object
         parent = self.parent
         while parent:
-            if parent.path_prefix:
-                path = parent.path_prefix + path
+            path_prefix = getattr(parent, 'path_prefix', NoPath)
+            path = path_prefix + path
             parent = getattr(parent, 'parent', None)
 
         return path
@@ -173,11 +175,10 @@ class SwaggerSpec(ResourceApi):
 
             # Add methods
             for method in operation.methods:
-                path_spec[method.value.lower()] = operation.to_doc()
+                path_spec[method.value.lower()] = operation.to_swagger()
 
         return paths, resource_defs
 
-    @Operation
     @doc.response(HTTPStatus.OK, "Swagger JSON of this API")
     def get_swagger(self, request):
         """
@@ -205,17 +206,15 @@ class SwaggerSpec(ResourceApi):
         })
 
     def load_static(self, file_name):
-        if not self.enable_ui:
-            raise HttpError(HTTPStatus.NOT_FOUND, 42)
-
-        static_path = os.path.join(os.path.dirname(__file__), 'static')
-        file_path = os.path.abspath(os.path.join(static_path, file_name))
-        if not file_path.startswith(static_path):
+        file_path = os.path.abspath(os.path.join(self.static_path, file_name))
+        # This is a security check to ensure this is not abused to
+        # read files outside of the static folder.
+        if not file_path.startswith(self.static_path):
             raise HttpError(HTTPStatus.NOT_FOUND, 42)
 
         try:
             return open(file_path, 'rb').read()
-        except OSError:
+        except IOError:
             raise HttpError(HTTPStatus.NOT_FOUND, 42)
 
     @doc.response(HTTPStatus.OK, "HTML content")
