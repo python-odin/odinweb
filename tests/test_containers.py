@@ -5,8 +5,7 @@ import pytest
 from odin.exceptions import ValidationError
 from odinweb import api
 from odinweb import containers
-from odinweb._compat.http import HTTPStatus
-from odinweb.constants import Method
+from odinweb.constants import Method, HTTPStatus
 from odinweb.data_structures import NoPath, UrlPath, HttpResponse
 from odinweb.decorators import Operation
 from odinweb.helpers import create_response

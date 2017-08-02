@@ -1,13 +1,13 @@
 from __future__ import absolute_import
 
 import pytest
-from odinweb.data_structures import HttpResponse
 
 from odin.codecs import json_codec
 
 from odinweb import content_type_resolvers
 from odinweb import helpers
 from odinweb.constants import HTTPStatus
+from odinweb.data_structures import HttpResponse
 from odinweb.exceptions import HttpError
 from odinweb.testing import MockRequest
 

@@ -2,8 +2,7 @@ import pytest
 
 from odinweb import api
 from odinweb import doc
-from odinweb._compat.http import HTTPStatus
-from odinweb.constants import In
+from odinweb.constants import HTTPStatus
 from odinweb.data_structures import Param, Response, DefaultResponse
 
 

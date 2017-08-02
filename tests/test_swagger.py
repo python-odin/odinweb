@@ -1,6 +1,6 @@
 import pytest
 
-from odinweb import swagger
+from odinweb import swagger, _compat
 from odinweb.constants import Type, HTTPStatus, Method
 from odinweb.containers import ApiInterfaceBase, ApiContainer, ApiVersion
 from odinweb.data_structures import UrlPath, Param
@@ -198,7 +198,10 @@ class TestSwaggerSpec(object):
         target = swagger.SwaggerSpec("", enable_ui=True)
 
         actual = target.load_static('ui.html')
-        assert actual.startswith('<!DOCTYPE html>')
+        if _compat.PY2:
+            assert actual.startswith('<!DOCTYPE html>')
+        else:
+            assert actual.startswith(b'<!DOCTYPE html>')
 
     def test_load_static__not_found_if_not_found(self):
         target = swagger.SwaggerSpec("")
