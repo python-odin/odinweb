@@ -62,8 +62,8 @@ def sign_url_path(url, secret_key, expire_in=None, digest=None):
     return "%s?%s" % (result.path, urlencode(query_args))
 
 
-def verify_url_path(url_path, secret_key, query_args, salt_arg=None, max_expiry=None, digest=None):
-    # type: (str, bytes, Dict[str, str], bytes, int, Callable) -> bool
+def verify_url_path(url_path, query_args, secret_key, salt_arg=None, max_expiry=None, digest=None):
+    # type: (str, Dict[str, str], bytes, bytes, int, Callable) -> bool
     """
     Verify a URL path is correctly signed.
 
@@ -101,10 +101,10 @@ def verify_url_path(url_path, secret_key, query_args, salt_arg=None, max_expiry=
     except ValueError:
         raise URLError("Invalid expiry value.")
     else:
-        expiry_delta = expiry_time - time.time()
+        expiry_delta = expiry_time - time()
         if expiry_delta < 0:
             raise URLError("Signature has expired")
-        if expiry_delta > max_expiry:
+        if max_expiry and expiry_delta > max_expiry:
             raise URLError("Expiry time out of range.")
 
     return True
