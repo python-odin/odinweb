@@ -17,10 +17,10 @@ To enable add the :py:class:`SwaggerSpec` resource API into your API::
 import collections
 import os
 
-from typing import List, Dict, Any  # noqa
+from typing import List, Dict, Any, Union, Tuple  # noqa
 
 from odin import fields
-from odin.utils import getmeta, lazy_property
+from odin.utils import getmeta, lazy_property, force_tuple
 
 from . import doc
 from . import resources
@@ -93,6 +93,7 @@ class SwaggerSpec(ResourceApi):
     static_path = os.path.join(os.path.dirname(__file__), 'static')
 
     def __init__(self, title, enabled=True, enable_ui=False, host=None, schemes=None):
+        # type: (str, bool, bool, str, Union[str, Tuple[str]]) -> None
         # Register operations
         if enabled:
             self._operations.append(Operation(SwaggerSpec.get_swagger)
@@ -106,7 +107,7 @@ class SwaggerSpec(ResourceApi):
         self.enabled = enabled
         self.enable_ui = enabled and enable_ui
         self.host = host
-        self.schemes = schemes
+        self.schemes = set(force_tuple(schemes or ()))
 
         self._ui_cache = None
 
@@ -185,10 +186,6 @@ class SwaggerSpec(ResourceApi):
         Generate this document.
         """
         api_base = self.parent
-        if not api_base:
-            raise HttpError(HTTPStatus.NOT_FOUND, 42, "Swagger not available.",
-                            "Swagger API is detached from a parent container.")
-
         paths, definitions = self.parse_operations()
         return dict_filter({
             'swagger': '2.0',
@@ -197,7 +194,7 @@ class SwaggerSpec(ResourceApi):
                 'version': str(getattr(api_base, 'version', 0))
             },
             'host': self.host or request.host,
-            'schemes': self.schemes,
+            'schemes': list(self.schemes) or None,
             'basePath': str(self.base_path),
             'consumes': list(CODECS.keys()),
             'produces': list(CODECS.keys()),
