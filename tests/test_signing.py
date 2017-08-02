@@ -83,9 +83,9 @@ def test_verify_url_path(monkeypatch, url, kwargs):
     # Signature not valid.
     ("/foo/bar?_=YJEYWGBKGUVZS&signature=QKUNPLEDOMFVU2NBTEASPR2J4B524KFMG4GMW2NJISVG2RQQVJED", {}),
     # Invalid expiry value
-
+    ("/foo/bar?signature=LZ7DKPFZ3UTQB3OCABLOMGDXNKAS4GFM5PNFECZV7FHQF5MXFZFQ&expires=zz&_=YJEYWGBKGUVZS", {}),
     # Signature has expired.
-
+    ("/foo/bar?signature=LR2YVUIDX4YSYM6TOSUTWSCYMBCSXBWNTMKMVDP4Y7LKFCIFKC7A&expires=1005&_=YJEYWGBKGUVZS", {}),
     # Expiry time out of range.
     ("/foo/bar?a=1&b=2&expires=1020&_=YJEYWGBKGUVZS&signature=XRKDRGPSUXFQUG36CNSOFY6RSWJFYSKTUOORJIQUUDG4WBCZOKUA", {'max_expiry': 1}),
 ))
