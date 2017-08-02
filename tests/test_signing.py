@@ -3,6 +3,7 @@ import base64
 import pytest
 
 from odinweb import signing
+from odinweb.exceptions import SigningError
 
 
 @pytest.mark.parametrize('url_path, kwargs, expected', (
@@ -41,15 +42,55 @@ def test_sign_url_path(monkeypatch, url, kwargs, expected):
     assert actual == expected
 
 
-@pytest.mark.parametrize('url_path, query_args, kwargs', (
-    ("/foo/bar", {"_": "YJEYWGBKGUVZS", "signature": "QKUNPLEDOMFVU2NBTEASPR2J4B524KFMG4GMW2NJISVG2RQQVJEA"}, {}),
-    ("/foo/bar", {"a": "1", "b": "2", "_": "YJEYWGBKGUVZS", "signature": "TU773VE25K5UFPHV6DGD5NXT7D74SFZYKVMEB6ZRONK2UXHT72EQ"}, {}),
-    ("/foo/bar", {"a": "1", "b": "2", "expires": "1020", "_": "YJEYWGBKGUVZS", "signature": "XRKDRGPSUXFQUG36CNSOFY6RSWJFYSKTUOORJIQUUDG4WBCZOKUA"}, {}),
+@pytest.mark.parametrize('url, kwargs', (
+    ("/foo/bar?_=YJEYWGBKGUVZS&signature=QKUNPLEDOMFVU2NBTEASPR2J4B524KFMG4GMW2NJISVG2RQQVJEA", {}),
+    ("/foo/bar?a=1&b=2&_=YJEYWGBKGUVZS&signature=TU773VE25K5UFPHV6DGD5NXT7D74SFZYKVMEB6ZRONK2UXHT72EQ", {}),
+    ("/foo/bar?a=1&b=2&expires=1020&_=YJEYWGBKGUVZS&signature=XRKDRGPSUXFQUG36CNSOFY6RSWJFYSKTUOORJIQUUDG4WBCZOKUA", {}),
 ))
-def test_verify_url_path(monkeypatch, url_path, query_args, kwargs):
+def test_verify_url_path(monkeypatch, url, kwargs):
     # Monkey patch to fix token and time values.
     monkeypatch.setattr(signing, 'token', lambda: 'YJEYWGBKGUVZS')
     monkeypatch.setattr(signing, 'time', lambda: 1010)
 
     kwargs.setdefault('secret_key', base64.b32decode('DEADBEEF'))
-    assert signing.verify_url_path(url_path, query_args, **kwargs)
+    assert signing.verify_url(url, **kwargs)
+
+
+@pytest.mark.parametrize('url, kwargs', (
+    # Signature missing
+    ("/foo/bar?_=YJEYWGBKGUVZS", {}),
+    # No salt_used
+    ("/foo/bar?_=YJEYWGBKGUVZS&signature=QKUNPLEDOMFVU2NBTEASPR2J4B524KFMG4GMW2NJISVG2RQQVJEA", {'salt_arg': 'x'}),
+    # Expiry time is required.
+    ("/foo/bar?_=YJEYWGBKGUVZS&signature=QKUNPLEDOMFVU2NBTEASPR2J4B524KFMG4GMW2NJISVG2RQQVJEA", {'max_expiry': 10}),
+    # Signature not valid.
+    ("/foo/bar?_=YJEYWGBKGUVZS&signature=QKUNPLEDOMFVU2NBTEASPR2J4B524KFMG4GMW2NJISVG2RQQVJED", {}),
+    # Invalid expiry value
+
+    # Signature has expired.
+
+    # Expiry time out of range.
+    ("/foo/bar?a=1&b=2&expires=1020&_=YJEYWGBKGUVZS&signature=XRKDRGPSUXFQUG36CNSOFY6RSWJFYSKTUOORJIQUUDG4WBCZOKUA", {'max_expiry': 1}),
+))
+def test_verify_url_path__error_cases(monkeypatch, url, kwargs):
+    # Monkey patch to fix token and time values.
+    monkeypatch.setattr(signing, 'token', lambda: 'YJEYWGBKGUVZS')
+    monkeypatch.setattr(signing, 'time', lambda: 1010)
+
+    kwargs.setdefault('secret_key', base64.b32decode('DEADBEEF'))
+    with pytest.raises(SigningError):
+        signing.verify_url(url, **kwargs)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
