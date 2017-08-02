@@ -228,7 +228,9 @@ class SwaggerSpec(ResourceApi):
             if isinstance(content, binary_type):
                 content = content.decode('UTF-8')
             self._ui_cache = content.replace(u"{{SWAGGER_PATH}}", str(self.swagger_path))
-        return HttpResponse(self._ui_cache, headers={'ContentType': 'text/html'})
+        return HttpResponse(self._ui_cache, headers={
+            'Content-Type': 'text/html'
+        })
 
     @doc.response(HTTPStatus.OK, "HTML content")
     def get_static(self, _, file_name=None):
