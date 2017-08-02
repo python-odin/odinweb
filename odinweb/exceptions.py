@@ -44,3 +44,9 @@ class AccessDenied(HttpError):
     """
     def __init__(self, message=None, developer_method=None, headers=None):
         super(AccessDenied, self).__init__(HTTPStatus.FORBIDDEN, 0, message, developer_method, None, headers)
+
+
+class SigningError(Exception):
+    """
+    Error raised during a signing operation
+    """
