@@ -4,10 +4,15 @@ import pytest
 import sys
 
 from odinweb.data_structures import HttpResponse, UrlPath, PathParam, _to_swagger, Param, Response, DefaultResponse, \
-    MiddlewareList
+    MiddlewareList, DefaultResource
 from odinweb.constants import Type, HTTPStatus, In
 
 from .resources import User
+
+
+def test_default_resource():
+    # Creating a DefaultResource creates itself!
+    assert DefaultResource is DefaultResource()
 
 
 @pytest.mark.parametrize('args, expected', (
