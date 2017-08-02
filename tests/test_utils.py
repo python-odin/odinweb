@@ -3,24 +3,24 @@ import pytest
 from odinweb import utils
 
 
-class TestRandomString(object):
+class TestToken(object):
     @pytest.mark.parametrize('depth, expected_length', (
         (8, 2),
-        (16, 3),
-        (24, 4),
-        (32, 6),
-        (48, 8),
-        (64, 11),
-        (128, 22),
-        (256, 43),
+        (16, 4),
+        (24, 5),
+        (32, 7),
+        (48, 10),
+        (64, 13),
+        (128, 26),
+        (256, 52),
     ))
     def test_bit_length(self, depth, expected_length):
-        actual = utils.random_string(depth)
+        actual = utils.token(depth)
         assert len(actual) == expected_length
 
     def test_invalid_bit_length(self):
         with pytest.raises(ValueError, message="Bit depth must be a multiple of 8"):
-            utils.random_string(42)
+            utils.token(42)
 
 
 @pytest.mark.parametrize('value, expected', (

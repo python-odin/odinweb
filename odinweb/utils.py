@@ -20,25 +20,26 @@ from . import _compat
 
 
 if _compat.PY2:
-    def random_string(bit_depth=64):
-        # type: (int) -> str
+    def token(bit_depth=64, encoder=base64.b32encode):
         """
-        Generate a random string of a certain bit depth
+        Generate a random token of a certain bit depth and strip any padding.
         """
-        if bit_depth % 8 != 0:
-            raise ValueError("Bit depth must be a multiple of 8")
-        return base64.urlsafe_b64encode(os.urandom(bit_depth/8)).rstrip('=')
-
+        # Fast divide by 8 ;)
+        chars = bit_depth >> 3
+        if bit_depth == chars << 3:
+            return encoder(os.urandom(chars)).rstrip('=')
+        raise ValueError("Bit depth must be a multiple of 8")
 else:
-    def random_string(bit_depth=64):
-        # type: (int) -> str
+    def token(bit_depth=64, encoder=base64.b32encode):
         """
-        Generate a random string of a certain bit depth
+        Generate a random token of a certain bit depth and strip any padding.
         """
-        if bit_depth % 8 != 0:
-            raise ValueError("Bit depth must be a multiple of 8")
-        data = os.urandom(int(bit_depth / 8))
-        return base64.urlsafe_b64encode(data).decode().rstrip('=')
+        # Fast divide by 8 ;)
+        chars = bit_depth >> 3
+        if bit_depth == chars << 3:
+            data = os.urandom(chars)
+            return encoder(data).decode().rstrip('=')
+        raise ValueError("Bit depth must be a multiple of 8")
 
 
 def to_bool(value):
