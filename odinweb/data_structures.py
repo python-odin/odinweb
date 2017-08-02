@@ -59,7 +59,7 @@ class HttpResponse(object):
         """
         Set Response content type.
         """
-        self.headers['content-type'] = value
+        self.headers['Content-Type'] = value
 
 
 # Used to define path nodes

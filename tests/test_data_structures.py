@@ -66,7 +66,7 @@ class TestHttpResponse(object):
         target = HttpResponse.from_status(HTTPStatus.OK)
         target.set_content_type('text/html')
 
-        assert target.headers == {'content-type': 'text/html'}
+        assert target.headers == {'Content-Type': 'text/html'}
 
 
 class TestUrlPath(object):

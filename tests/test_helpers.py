@@ -112,7 +112,7 @@ class TestCreateResponse(object):
 
         assert isinstance(actual, HttpResponse)
         assert actual.status == HTTPStatus.OK
-        assert actual.headers['content-type'] == json_codec.CONTENT_TYPE
+        assert actual.headers['Content-Type'] == json_codec.CONTENT_TYPE
         assert json_codec.json.loads(actual.body) == {"foo": "bar"}
 
     def test_content_custom_status(self):
@@ -122,5 +122,5 @@ class TestCreateResponse(object):
 
         assert isinstance(actual, HttpResponse)
         assert actual.status == HTTPStatus.CREATED
-        assert actual.headers['content-type'] == json_codec.CONTENT_TYPE
+        assert actual.headers['Content-Type'] == json_codec.CONTENT_TYPE
         assert json_codec.json.loads(actual.body) == {"foo": "bar"}
