@@ -20,6 +20,7 @@ except ImportError:
 # Type imports
 from typing import Callable, Dict
 
+from . import _compat
 from .exceptions import SigningError
 from .utils import token
 
@@ -35,7 +36,13 @@ def _generate_signature(url_path, secret_key, query_args, digest=None, encoder=N
     digest = digest or DEFAULT_DIGEST
     encoder = encoder or DEFAULT_ENCODER
     msg = "%s?%s" % (url_path, '&'.join('%s=%s' % (k, query_args[k]) for k in sorted(query_args)))
-    return encoder(hmac.new(secret_key, msg, digestmod=digest).digest()).strip('=')  # Strip padding
+    if _compat.text_type:
+        msg = msg.encode('UTF8')
+    signature = hmac.new(secret_key, msg, digestmod=digest).digest()
+    if _compat.PY2:
+        return encoder(signature).rstrip('=')  # Strip padding
+    else:
+        return encoder(signature).decode().rstrip('=')  # Strip padding
 
 
 def sign_url_path(url, secret_key, expire_in=None, digest=None):
