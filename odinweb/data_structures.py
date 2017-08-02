@@ -226,7 +226,7 @@ class UrlPath(object):
         Format a node to be consumable by the `UrlPath.parse`.
         """
         if path_node.type:
-            return "{{{}:{}}}".format(path_node.name, path_node.type.value)
+            return "{{{}:{}}}".format(path_node.name, path_node.type.name)
         return "{{{}}}".format(path_node.name)
 
     def format(self, node_formatter=None):

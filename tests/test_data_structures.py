@@ -122,7 +122,7 @@ class TestUrlPath(object):
         (('', 'a'), '/a'),
         (('', 'a', 'b'), '/a/b'),
         (('', 'a', PathParam('b', None), 'c'), '/a/{b}/c'),
-        (('', 'a', PathParam('b', Type.String), 'c'), '/a/{b:string}/c'),
+        (('', 'a', PathParam('b', Type.String), 'c'), '/a/{b:String}/c'),
     ))
     def test_str(self, path, expected):
         target = UrlPath(*path)
@@ -198,8 +198,8 @@ class TestUrlPath(object):
         assert actual == expected
 
     @pytest.mark.parametrize('path_node, expected', (
-        (PathParam('name'), '{name:integer}'),
-        (PathParam('name', Type.String), '{name:string}'),
+        (PathParam('name'), '{name:Integer}'),
+        (PathParam('name', Type.String), '{name:String}'),
         (PathParam('name', None, None), '{name}'),
     ))
     def test_odinweb_node_formatter(self, path_node, expected):
@@ -208,10 +208,10 @@ class TestUrlPath(object):
     @pytest.mark.parametrize('url_path, formatter, expected', (
         (UrlPath('a', 'b', 'c'), None, 'a/b/c'),
         (UrlPath('', 'a', 'b', 'c'), None, '/a/b/c'),
-        (UrlPath('', 'a', PathParam('b'), 'c'), None, '/a/{b:integer}/c'),
+        (UrlPath('', 'a', PathParam('b'), 'c'), None, '/a/{b:Integer}/c'),
         (UrlPath('', 'a', PathParam('b', None), 'c'), None, '/a/{b}/c'),
-        (UrlPath('', 'a', PathParam('b', Type.String), 'c'), None, '/a/{b:string}/c'),
-        (UrlPath('', 'a', PathParam('b', Type.String), 'c'), UrlPath.odinweb_node_formatter, '/a/{b:string}/c'),
+        (UrlPath('', 'a', PathParam('b', Type.String), 'c'), None, '/a/{b:String}/c'),
+        (UrlPath('', 'a', PathParam('b', Type.String), 'c'), UrlPath.odinweb_node_formatter, '/a/{b:String}/c'),
     ))
     def test_format(self, url_path, formatter, expected):
         actual = url_path.format(formatter)
