@@ -6,10 +6,11 @@ Signing
 Implementation of URL signing. 
 
 """
+import base64
 import hashlib
 import hmac
-import time
 
+from time import time
 try:
     from urllib.parse import urlencode, urlparse, parse_qs
     from urllib.error import URLError
@@ -18,12 +19,28 @@ except ImportError:
     from urllib2 import URLError
     from urlparse import parse_qs, urlparse
 
-from .utils import random_string
+# Type imports
+from typing import Callable, Dict
+
+from .utils import token
 
 DEFAULT_DIGEST = hashlib.sha256
+DEFAULT_ENCODER = base64.b32encode
+
+
+def _generate_signature(url_path, secret_key, query_args, digest=None, encoder=None):
+    # type: (str, bytes, Dict[str, str], Callable, Callable) -> str
+    """
+    Generate signature from pre-parsed URL.
+    """
+    digest = digest or DEFAULT_DIGEST
+    encoder = encoder or DEFAULT_ENCODER
+    msg = "%s?%s" % (url_path, '&'.join('%s=%s' % (k, query_args[k]) for k in sorted(query_args)))
+    return encoder(hmac.new(secret_key, msg, digestmod=digest).digest()).strip('=')  # Strip padding
 
 
 def sign_url_path(url, secret_key, expire_in=None, digest=None):
+    # type: (str, bytes, int, Callable) -> str
     """
     Sign a URL (excluding the domain and scheme).
 
@@ -37,30 +54,16 @@ def sign_url_path(url, secret_key, expire_in=None, digest=None):
     result = urlparse(url)
     query_args = {k: v[0] for k, v in parse_qs(result.query).items()}
 
-    query_args['_'] = random_string()
+    query_args['_'] = token()
     if expire_in is not None:
-        query_args['expires'] = int(time.time() + expire_in)
+        query_args['expires'] = int(time() + expire_in)
     query_args['signature'] = _generate_signature(result.path, secret_key, query_args, digest)
 
     return "%s?%s" % (result.path, urlencode(query_args))
 
 
-def verify_url(url, secret_key, **kwargs):
-    """
-    Verify a signed URL (excluding the domain and scheme).
-
-    :param url: URL to sign
-    :param secret_key: Secret key
-    :rtype: bool
-    :raises: URLError
-
-    """
-    result = urlparse(url)
-    query_args = {k: v[0] for k, v in parse_qs(result.query).items()}
-    return verify_url_path(result.path, secret_key, query_args, **kwargs)
-
-
 def verify_url_path(url_path, secret_key, query_args, salt_arg=None, max_expiry=None, digest=None):
+    # type: (str, bytes, Dict[str, str], bytes, int, Callable) -> bool
     """
     Verify a URL path is correctly signed.
 
@@ -107,10 +110,16 @@ def verify_url_path(url_path, secret_key, query_args, salt_arg=None, max_expiry=
     return True
 
 
-def _generate_signature(url_path, secret_key, query_args, digest=None):
+def verify_url(url, secret_key, **kwargs):
     """
-    Generate signature from pre-parsed URL.
+    Verify a signed URL (excluding the domain and scheme).
+
+    :param url: URL to sign
+    :param secret_key: Secret key
+    :rtype: bool
+    :raises: URLError
+
     """
-    digest = digest or DEFAULT_DIGEST
-    msg = "%s?%s" % (url_path, '&'.join('%s=%s' % (k, query_args[k]) for k in sorted(query_args)))
-    return hmac.new(secret_key, msg, digestmod=digest).hexdigest()
+    result = urlparse(url)
+    query_args = {k: v[0] for k, v in parse_qs(result.query).items()}
+    return verify_url_path(result.path, secret_key, query_args, **kwargs)
