@@ -95,7 +95,7 @@ class SwaggerSpec(ResourceApi):
     def __init__(self, title, enabled=True, enable_ui=False, host=None, schemes=None):
         # Register operations
         if enabled:
-            self._opertions.append(Operation(SwaggerSpec.get_swagger)
+            self._operations.append(Operation(SwaggerSpec.get_swagger)
 )
             if enable_ui:
                 self._operations.append(Operation(SwaggerSpec.get_ui, UrlPath.parse('ui')))
@@ -104,7 +104,7 @@ class SwaggerSpec(ResourceApi):
         super(SwaggerSpec, self).__init__()
         self.title = title
         self.enabled = enabled
-        self.enable_ui = enable_ui
+        self.enable_ui = enabled and enable_ui
         self.host = host
         self.schemes = schemes
 
