@@ -157,6 +157,10 @@ class ApiContainer(object):
         # type: (*Union[Operation, ApiContainer, ResourceApi], **Any) -> None
         self.containers = list(containers)
 
+        # Set self as the parent
+        for container in self.containers:
+            container.parent = self
+
         # Having options at the end is  work around until support for
         # Python < 3.5 is dropped, at that point keyword only args will
         # be used in place of the options kwargs. eg:
@@ -203,7 +207,6 @@ class ApiContainer(object):
             path_base = self.path_prefix or UrlPath()
 
         for container in self.containers:
-            container.parent = self
             for op_path in container.op_paths(path_base):
                 yield op_path
 
