@@ -1,9 +1,26 @@
 import base64
-
 import pytest
+
+try:
+    from urllib.parse import urlparse, parse_qs
+except ImportError:
+    from urlparse import urlparse, parse_qs
 
 from odinweb import signing
 from odinweb.exceptions import SigningError
+
+
+def url_compare(a, b):
+    a = urlparse(a)
+    b = urlparse(b)
+    return all((
+        a.scheme == b.scheme,
+        a.netloc == b.netloc,
+        a.path == b.path,
+        a.params == b.params,
+        parse_qs(a.query) == parse_qs(b.query),
+        a.fragment == b.fragment
+    ))
 
 
 @pytest.mark.parametrize('url_path, kwargs, expected', (
@@ -39,7 +56,7 @@ def test_sign_url_path(monkeypatch, url, kwargs, expected):
 
     kwargs.setdefault('secret_key', base64.b32decode('DEADBEEF'))
     actual = signing.sign_url_path(url, **kwargs)
-    assert actual == expected
+    assert url_compare(actual, expected)
 
 
 @pytest.mark.parametrize('url, kwargs', (
