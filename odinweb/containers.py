@@ -223,7 +223,7 @@ class ApiVersion(ApiCollection):
     Collection that defines a version of an API.
     """
     def __init__(self, *containers, **options):
-        # type: (*Union[Operation, ApiContainer], **Any) -> None
+        # type: (*Union[Operation, ApiContainer, ResourceApi], **Any) -> None
         self.version = options.pop('version', 1)
         options.setdefault('name', 'v{}'.format(self.version))
         super(ApiVersion, self).__init__(*containers, **options)
