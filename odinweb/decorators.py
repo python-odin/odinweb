@@ -186,7 +186,7 @@ class Operation(object):
 
     # Docs ####################################################################
 
-    def to_doc(self):
+    def to_swagger(self):
         """
         Generate a dictionary for documentation generation.
         """

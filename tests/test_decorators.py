@@ -32,7 +32,7 @@ class TestOperation(object):
             Test target
             """
 
-        assert "tests.test_decorators.target - GET test/{id:integer}/start" == str(target)
+        assert "tests.test_decorators.target - GET test/{id:Integer}/start" == str(target)
 
     def test_repr(self):
         @decorators.Operation(url_path="test/{id}/start")
@@ -99,7 +99,7 @@ class TestOperation(object):
         (decorators.Operation, {}, {}),
         (decorators.Operation, {'tags': 'foo'}, {'tags': ['foo']}),
     ))
-    def test_to_doc(self, decorator, init_args, expected):
+    def test_to_swagger(self, decorator, init_args, expected):
         @decorator(**init_args)
         def my_func(request):
             """
@@ -115,7 +115,7 @@ class TestOperation(object):
             'schema': {'$ref': '#/definitions/Error'}
         }})
 
-        actual = my_func.to_doc()
+        actual = my_func.to_swagger()
         assert actual == expected
 
 
