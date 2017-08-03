@@ -4,7 +4,7 @@ import pytest
 import sys
 
 from odinweb.data_structures import HttpResponse, UrlPath, PathParam, _to_swagger, Param, Response, DefaultResponse, \
-    MiddlewareList, DefaultResource
+    MiddlewareList, DefaultResource, ImmutableMultiDict
 from odinweb.constants import Type, HTTPStatus, In
 
 from .resources import User
@@ -408,3 +408,13 @@ class TestMiddlewareList(object):
             assert actual.__func__.__qualname__ == expected.post_swagger.__qualname__
             count += 1
         assert count == 2
+
+
+class TestImmutableMultiDict(object):
+    @pytest.mark.parametrize('iterable, expected', (
+
+    ))
+    def test_update(self, iterable, expected):
+        target = ImmutableMultiDict(iterable)
+
+        assert target._data == expected

@@ -428,3 +428,100 @@ class MiddlewareList(list):
         """
         middleware = sort_by_priority(self)
         return tuple(m.post_swagger for m in middleware if hasattr(m, 'post_swagger'))
+
+
+class ImmutableMultiDict(object):
+    """
+    Provides an immutable dictionary where each key can hold multiple values. The primary use of this object
+    is to handle HTTP data where the same key can be supplied multiple times (eg query section of a URI).
+
+    An attempt has been made to provide an interface similar to other frameworks.
+
+    These frameworks include Flask/Bottle/Django.
+
+    """
+    def __init__(self, iterable):
+        self._data = {}
+        self._update(iterable)
+
+    def __len__(self):
+        return len(self._data)
+
+    def __contains__(self, item):
+        try:
+            return len(self._data[item]) > 0
+        except KeyError:
+            return False
+
+    def __getitem__(self, item):
+        try:
+            self._data[item][0]
+        except IndexError:
+            raise KeyError(item)
+
+    def _update(self, iterable):
+        if not iterable:
+            return
+
+        data = self._data
+
+        if isinstance(iterable, dict):
+            for k, v in iterable.items():
+                data.setdefault(k, []).append(v)
+
+        else:
+            # Assume iterable will raise an Type error if not.
+            for idx, item in enumerate(iterable):
+                try:
+                    k, v = item
+                except ValueError:
+                    ValueError("multi-dictionary update sequence element #{} has length {}; 2 is required".format(
+                        idx, len(item)
+                    ))
+                else:
+                    if isinstance(v, (list, tuple)):
+                        data.setdefault(k, []).extend(v)
+                    else:
+                        data.setdefault(k, []).append(v)
+
+    def has_key(self, k):
+        return k in self
+
+    def get(self, k, default=None, type=None):
+        try:
+            v = self._data[k][0]
+        except LookupError:
+            return default
+
+        if type:
+            try:
+                v = type(v)
+            except ValueError:
+                return default
+
+        return v
+
+    def getlist(self, k):
+        return self._data.get(k) or []
+
+    def keys(self):
+        return self._data.keys()
+
+    def values(self):
+        for v in self._data.values():
+            if v:
+                yield v[0]
+
+    def lists(self):
+        for v in self._data.values():
+            if v:
+                yield v
+
+    def items(self, multi=False):
+        for k, i in self._data.items():
+            if multi:
+                for v in i:
+                    yield k, v
+            else:
+                if i:
+                    yield k, i
