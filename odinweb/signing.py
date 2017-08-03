@@ -69,7 +69,7 @@ def sign_url_path(url, secret_key, expire_in=None, digest=None):
 
 
 def verify_url_path(url_path, query_args, secret_key, salt_arg='_', max_expiry=None, digest=None):
-    # type: (str, Dict[str, str], bytes, bytes, int, Callable) -> bool
+    # type: (str, Dict[str, str], bytes, str, int, Callable) -> bool
     """
     Verify a URL path is correctly signed.
 
