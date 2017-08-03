@@ -27,7 +27,8 @@ class MockRequest(object):
                  request_codec=None, response_codec=None):
         # type: (str, Dict[str, str], Dict[str, str], Method, str, Any, Any) -> MockRequest
         scheme, netloc, path, params, query, fragment = urlparse(uri)
-        return cls(scheme, netloc, path, parse_qs(query), post, headers, method, body, request_codec, response_codec)
+        query = {k: v[0] for k, v in parse_qs(query).items()}  # Hack need to use a multi dict.
+        return cls(scheme, netloc, path, query, post, headers, method, body, request_codec, response_codec)
 
     def __init__(self, scheme='http', host='127.0.0.1', path=None, query=None, headers=None, method=Method.GET,
                  post=None, body='', request_codec=None, response_codec=None):
