@@ -6,7 +6,7 @@ from collections import namedtuple
 from odin.utils import getmeta, lazy_property, force_tuple
 
 # Imports for typing support
-from typing import Dict, Union, Optional, Callable, Any, AnyStr  # noqa
+from typing import Dict, Union, Optional, Callable, Any, AnyStr, Iterable, List, Tuple, Hashable  # noqa
 from odin import Resource  # noqa
 
 from . import _compat
@@ -428,3 +428,166 @@ class MiddlewareList(list):
         """
         middleware = sort_by_priority(self)
         return tuple(m.post_swagger for m in middleware if hasattr(m, 'post_swagger'))
+
+
+class MultiDict(object):
+    """
+    Provides an immutable dictionary where each key can hold multiple values. The primary use of this object
+    is to handle HTTP data where the same key can be supplied multiple times (eg query section of a URI).
+
+    An attempt has been made to provide an interface similar to other frameworks.
+
+    These frameworks include Flask/Bottle/Django.
+
+    """
+    def __init__(self, iterable=None):
+        # type: (Iterable) -> None
+        self._data = {}
+        if iterable:
+            self.update(iterable)
+
+    def __len__(self):
+        return len(self._data)
+
+    def __contains__(self, item):
+        try:
+            return len(self._data[item]) > 0
+        except KeyError:
+            return False
+
+    def __getitem__(self, item):
+        try:
+            return self._data[item][0]
+        except IndexError:
+            raise KeyError(item)
+
+    def __str__(self):
+        return repr(self._data)
+
+    def __repr__(self):
+        return repr(self._data)
+
+    def copy(self):
+        # type: () -> MultiDict
+        """
+        Create a copy of the multi-dict.
+        """
+        new = MultiDict({})
+        new._data = self._data.copy()
+        return new
+
+    def update(self, iterable):
+        # type: (Union[Dict[Hashable, Any], Iterable[Tuple[Hashable, Any]]]) -> None
+
+        if isinstance(iterable, dict):
+            iterable = iterable.items()
+        else:
+            # Assume iterable will raise an Type error if not.
+            iterable = iter(iterable)
+
+        data = self._data
+        for idx, item in enumerate(iterable):
+            try:
+                k, v = item
+            except (TypeError, ValueError):
+                try:
+                    raise ValueError(
+                        "multi-dictionary update sequence element #{} has length {}; 2 is required".format(
+                            idx, len(item))
+                    )
+                except TypeError:
+                    raise ValueError(
+                        "multi-dictionary update sequence element #{} is not a sequence type.".format(idx)
+                    )
+            else:
+                l = data.setdefault(k, [])
+                if isinstance(v, (list, tuple)):
+                    l.extend(v)
+                else:
+                    l.append(v)
+
+    def has_key(self, k):
+        # type: (Hashable) -> bool
+        return k in self
+
+    def get(self, k, default=None, type=None):
+        # type: (Hashable, Any, Callable) -> Any
+        """
+        Get a first item with optional type conversion.
+
+        Returns the default on failure.
+        """
+        try:
+            v = self._data[k][0]
+        except LookupError:
+            return default
+
+        if type:
+            try:
+                v = type(v)
+            except ValueError:
+                return default
+
+        return v
+
+    def getlist(self, key):
+        # type: (Hashable) -> List[Any]
+        """
+        Get list of all values associated with a particular key.
+        """
+        return self._data.get(key) or []
+
+    def keys(self):
+        # type: () -> Iterable[Hashable]
+        """
+        Iterable of all keys
+        """
+        return self._data.keys()
+
+    def values(self, multi=False):
+        # type: (bool) -> Iterable[Any]
+        """
+        Yield first value in each key (analogous to a builtin dict).
+
+        If `multi=True` will yield all values.
+
+        """
+        for value in self._data.values():
+            if multi:
+                for v in value:
+                    yield v
+            else:
+                if value:
+                    yield value[0]
+
+    def lists(self):
+        # type: () -> Iterable[List[Any]]
+        """
+        Similar to `dict.values`, but yields a lists of values associated with each key.
+        """
+        for v in self._data.values():
+            if v:
+                yield v
+
+    def items(self, multi=False):
+        # type: (bool) -> Iterable[Tuple[Hashable, Any]]
+        """
+        Yield key and first value (analogous to a builtin dict).
+
+        If `multi=True` will yield key and value pairs for every value.
+
+        """
+        for k, i in self._data.items():
+            if multi:
+                for v in i:
+                    yield k, v
+            else:
+                if i:
+                    yield k, i[0]
+
+    def itemlists(self):
+        # type: () -> Iterable[Tuple[Hashable, List[Any]]]
+        """
+        Yield key, list pairs for each key.
+        """
+        return self._data.items()
