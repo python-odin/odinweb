@@ -430,7 +430,7 @@ class MiddlewareList(list):
         return tuple(m.post_swagger for m in middleware if hasattr(m, 'post_swagger'))
 
 
-class ImmutableMultiDict(object):
+class MultiDict(object):
     """
     Provides an immutable dictionary where each key can hold multiple values. The primary use of this object
     is to handle HTTP data where the same key can be supplied multiple times (eg query section of a URI).
@@ -440,10 +440,11 @@ class ImmutableMultiDict(object):
     These frameworks include Flask/Bottle/Django.
 
     """
-    def __init__(self, iterable):
+    def __init__(self, iterable=None):
         # type: (Iterable) -> None
         self._data = {}
-        self._update(iterable)
+        if iterable:
+            self.update(iterable)
 
     def __len__(self):
         return len(self._data)
@@ -466,12 +467,17 @@ class ImmutableMultiDict(object):
     def __repr__(self):
         return repr(self._data)
 
-    def _update(self, iterable):
+    def copy(self):
+        # type: () -> MultiDict
         """
-        Update internal data dict.
+        Create a copy of the multi-dict.
         """
-        if not iterable:
-            return
+        new = MultiDict({})
+        new._data = self._data.copy()
+        return new
+
+    def update(self, iterable):
+        # type: (Union[Dict[Hashable, Any], Iterable[Tuple[Hashable, Any]]]) -> None
 
         if isinstance(iterable, dict):
             iterable = iterable.items()
