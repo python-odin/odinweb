@@ -460,6 +460,12 @@ class ImmutableMultiDict(object):
         except IndexError:
             raise KeyError(item)
 
+    def __str__(self):
+        return repr(self._data)
+
+    def __repr__(self):
+        return repr(self._data)
+
     def _update(self, iterable):
         """
         Update internal data dict.
@@ -477,7 +483,7 @@ class ImmutableMultiDict(object):
         for idx, item in enumerate(iterable):
             try:
                 k, v = item
-            except TypeError:
+            except (TypeError, ValueError):
                 try:
                     raise ValueError(
                         "multi-dictionary update sequence element #{} has length {}; 2 is required".format(
