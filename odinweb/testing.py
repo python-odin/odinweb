@@ -16,7 +16,7 @@ except ImportError:
     from urlparse import urlparse, parse_qs
 
 from .constants import Method
-from .data_structures import ImmutableMultiDict
+from .data_structures import MultiValueDict
 
 
 class MockRequest(object):
@@ -34,11 +34,11 @@ class MockRequest(object):
 
     def __init__(self, scheme='http', host='127.0.0.1', path=None, query=None, headers=None, method=Method.GET,
                  post=None, body='', request_codec=None, response_codec=None):
-        # type: (str, str, str, Dict[str, str], ImmutableMultiDict, Dict[str, str], Method, str, Any, Any) -> MockRequest
+        # type: (str, str, str, Dict[str, str], MultiValueDict, Dict[str, str], Method, str, Any, Any) -> MockRequest
         self.scheme = scheme
         self.host = host
         self.path = path
-        self.GET = ImmutableMultiDict(query or {})
+        self.GET = MultiValueDict(query or {})
         self.headers = headers or {}
         self.method = method
         self.POST = post or {}
