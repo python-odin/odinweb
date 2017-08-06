@@ -4,7 +4,7 @@ import pytest
 import sys
 
 from odinweb.data_structures import HttpResponse, UrlPath, PathParam, _to_swagger, Param, Response, DefaultResponse, \
-    MiddlewareList, DefaultResource, ImmutableMultiDict
+    MiddlewareList, DefaultResource, MultiValueDict
 from odinweb.constants import Type, HTTPStatus, In
 
 from .resources import User
@@ -410,7 +410,17 @@ class TestMiddlewareList(object):
         assert count == 2
 
 
-class TestImmutableMultiDict(object):
+class TestMultiDict(object):
+    data = {
+        'foo': ['a', 'b'],
+        'bar': ['1'],
+        'eek': ['c', 'd', 'e'],
+    }
+
+    @pytest.fixture
+    def sample_data(self):
+        return MultiValueDict(self.data)
+
     @pytest.mark.parametrize('iterable, expected', (
         (None, {}),
         ({}, {}),
@@ -420,78 +430,67 @@ class TestImmutableMultiDict(object):
         ({'foo': ['a', 'b'], 'bar': 'c'}, {'foo': ['a', 'b'], 'bar': ['c']}),
         ((('foo', 'a'), ('bar', 'b')), {'foo': ['a'], 'bar': ['b']}),
         ((('foo', 'a'), ('bar', 'b'), ('foo', 'c')), {'foo': ['a', 'c'], 'bar': ['b']}),
-        ((('foo', ['a', 'b']), ('bar', 'c')), {'foo': ['a', 'b'], 'bar': ['c']}),
         ((('foo', 'ab'), ('bar', 'c')), {'foo': ['ab'], 'bar': ['c']}),
+        (MultiValueDict({'foo': ['a', 'b'], 'bar': 'c'}), {'foo': ['a', 'b'], 'bar': ['c']}),
     ))
     def test_init(self, iterable, expected):
-        target = ImmutableMultiDict(iterable)
+        target = MultiValueDict(iterable)
 
-        assert target._data == expected
+        assert target.to_dict(flat=False) == expected
         assert len(target) == len(expected)
 
     @pytest.mark.parametrize('iterable, expected', (
         (1, TypeError),
-        ([1, 2, 3], ValueError),
+        ([1, 2, 3], TypeError),
         ([(1, 2, 3)], ValueError),
         ([(1, 2), 'abc'], ValueError),
     ))
     def test_init__bad_values(self, iterable, expected):
         with pytest.raises(expected):
-            ImmutableMultiDict(iterable)
+            MultiValueDict(iterable)
 
-    @pytest.fixture()
-    def sample_data(self):
-        return ImmutableMultiDict({
-            'foo': ['a', 'b'],
-            'bar': ['1'],
-            'eek': [],
-            'boo': ['c', 'd', 'e'],
-        })
+    def test_getstate(self, sample_data):
+        assert sample_data.__getstate__() == self.data
 
-    @pytest.mark.parametrize('key, expected', (
-        ('foo', 'a'),
-        ('bar', '1'),
+    def test_setstate(self):
+        target = MultiValueDict({'foo': ['x', 'z']})
+        target.__setstate__(self.data)
+        assert target == self.data
+
+    @pytest.mark.parametrize('attr, args, expected', (
+        ('__getitem__', ['foo'], 'b'),
+        ('__getitem__', ['bar'], '1'),
+        ('copy', [], MultiValueDict(data)),
+        ('get', ['foo'], 'b'),
+        ('get', ['bar'], '1'),
+        ('get', ['boo'], None),
+        ('get', ['boo', 'z'], 'z'),
+        ('get', ['foo', 'z', int], 'z'),
+        ('get', ['bar', 'z', int], 1),
+        ('to_dict', [True], {'foo': 'b', 'bar': '1', 'eek': 'e'}),
+        ('to_dict', [False], {'foo': ['a', 'b'], 'bar': ['1'], 'eek': ['c', 'd', 'e']}),
     ))
-    def test_get(self, sample_data, key, expected):
-        assert sample_data[key] == expected
+    def test_get_single(self, sample_data, attr, args, expected):
+        actual = getattr(sample_data, attr)(*args)
+        assert actual == expected
 
-    @pytest.mark.parametrize('key', (
-        'eek', 'blorg',
-    ))
-    def test_get__error(self, sample_data, key):
-        with pytest.raises(KeyError) as err:
-            _ = sample_data[key]
-        assert err.value.message == key
-
-    @pytest.mark.parametrize('command, args, expected', (
-        ('has_key', ['foo'], True),
-        ('has_key', ['eek'], False),
-        ('has_key', ['blorg'], False),
-        ('get', ['foo'], 'a'),
-        ('get', ['eek'], None),
-        ('get', ['blorg'], None),
-        ('get', ['foo', 'z'], 'a'),
-        ('get', ['eek', 'z'], 'z'),
-        ('get', ['blorg', 'z'], 'z'),
-        ('get', ['foo', 0, int], 0),
-        ('get', ['bar', 0, int], 1),
-        ('get', ['eek', 0, int], 0),
-        ('get', ['blorg', 0, int], 0),
+    @pytest.mark.parametrize('attr, args, expected', (
         ('getlist', ['foo'], ['a', 'b']),
-        ('getlist', ['eek'], []),
-        ('getlist', ['blorg'], []),
+        ('getlist', ['boo'], []),
+        ('getlist', ['bar', int], [1]),
     ))
-    def test_basic_functions(self, sample_data, command, args, expected):
-        assert getattr(sample_data, command)(*args) == expected
+    def test_get_list(self, sample_data, attr, args, expected):
+        actual = getattr(sample_data, attr)(*args)
+        assert list(actual) == expected
 
-    @pytest.mark.parametrize('command, args, expected', (
-        ('keys', [], ['foo', 'bar', 'eek', 'boo']),
-        ('values', [], ['a', '1', 'c']),
-        ('values', [True], ['a', 'b', '1', 'c', 'd', 'e']),
-        ('lists', [], [['a', 'b'], ['1'], ['c', 'd', 'e']]),
-        ('items', [], [('foo', 'a'), ('bar', '1'), ('boo', 'c')]),
-        ('items', [True], [('foo', 'a'), ('foo', 'b'), ('bar', '1'), ('boo', 'c'), ('boo', 'd'), ('boo', 'e')]),
-        ('itemlists', [], [('foo', ['a', 'b']), ('bar', ['1']), ('eek', []), ('boo', ['c', 'd', 'e'])]),
+    @pytest.mark.parametrize('attr, kwargs, expected', (
+        ('', {}, {}),
     ))
-    def test_list_functions(self, sample_data, command, args, expected):
-        assert list(getattr(sample_data, command)(*args)) == expected
+    def test_set_single(self, sample_data, attr, kwargs, expected):
+        pass
+
+    @pytest.mark.parametrize('attr, kwargs, expected', (
+        ('', {}, {}),
+    ))
+    def test_set_list(self, sample_data, attr, kwargs, expected):
+        pass
