@@ -11,6 +11,9 @@ import hashlib
 import hmac
 
 from time import time
+
+from odinweb.data_structures import MultiValueDict
+
 try:
     from urllib.parse import urlencode, urlparse, parse_qs
 except ImportError:
@@ -35,7 +38,7 @@ def _generate_signature(url_path, secret_key, query_args, digest=None, encoder=N
     """
     digest = digest or DEFAULT_DIGEST
     encoder = encoder or DEFAULT_ENCODER
-    msg = "%s?%s" % (url_path, '&'.join('%s=%s' % (k, query_args[k]) for k in sorted(query_args)))
+    msg = "%s?%s" % (url_path, '&'.join('%s=%s' % i for i in query_args.sorteditems(multi=True)))
     if _compat.text_type:
         msg = msg.encode('UTF8')
     signature = hmac.new(secret_key, msg, digestmod=digest).digest()
@@ -58,14 +61,12 @@ def sign_url_path(url, secret_key, expire_in=None, digest=None):
 
     """
     result = urlparse(url)
-    query_args = {k: v[0] for k, v in parse_qs(result.query).items()}
-
+    query_args = MultiValueDict(parse_qs(result.query))
     query_args['_'] = token()
     if expire_in is not None:
         query_args['expires'] = int(time() + expire_in)
     query_args['signature'] = _generate_signature(result.path, secret_key, query_args, digest)
-
-    return "%s?%s" % (result.path, urlencode(query_args))
+    return "%s?%s" % (result.path, urlencode(list(query_args.sorteditems(True))))
 
 
 def verify_url_path(url_path, query_args, secret_key, salt_arg='_', max_expiry=None, digest=None):
@@ -127,5 +128,5 @@ def verify_url(url, secret_key, **kwargs):
 
     """
     result = urlparse(url)
-    query_args = {k: v[0] for k, v in parse_qs(result.query).items()}
+    query_args = MultiValueDict(parse_qs(result.query))
     return verify_url_path(result.path, query_args, secret_key, **kwargs)
