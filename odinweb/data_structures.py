@@ -1,12 +1,14 @@
 from __future__ import absolute_import
 
+import copy
 import re
 
 from collections import namedtuple
 from odin.utils import getmeta, lazy_property, force_tuple
 
 # Imports for typing support
-from typing import Dict, Union, Optional, Callable, Any, AnyStr, Iterable, List, Tuple, Hashable  # noqa
+from typing import Dict, Union, Optional, Callable, Any, AnyStr, Iterable, List, Tuple, Hashable, Generator, \
+    Iterator  # noqa
 from odin import Resource  # noqa
 
 from . import _compat
@@ -430,164 +432,358 @@ class MiddlewareList(list):
         return tuple(m.post_swagger for m in middleware if hasattr(m, 'post_swagger'))
 
 
-class MultiDict(object):
+class MultiValueDictKeyError(KeyError):
+    pass
+
+
+if _compat.PY2:
+    iterkeys = dict.iterkeys
+    itervalues = dict.itervalues
+    iteritems = dict.iteritems
+else:
+    iterkeys = dict.keys
+    itervalues = dict.values
+    iteritems = dict.items
+
+
+class NotDefined(object):
+    pass
+
+
+class MultiValueDict(dict):
     """
-    Provides an immutable dictionary where each key can hold multiple values. The primary use of this object
-    is to handle HTTP data where the same key can be supplied multiple times (eg query section of a URI).
+    A subclass of dictionary customized to handle multiple values for the
+    same key.
+    >>> d = MultiValueDict({'name': ['Adrian', 'Simon'], 'position': ['Developer']})
+    >>> d['name']
+    'Simon'
+    >>> d.getlist('name')
+    ['Adrian', 'Simon']
+    >>> d.getlist('doesnotexist')
+    []
+    >>> d.getlist('doesnotexist', ['Adrian', 'Simon'])
+    ['Adrian', 'Simon']
+    >>> d.get('lastname', 'nonexistent')
+    'nonexistent'
+    >>> d.setlist('lastname', ['Holovaty', 'Willison'])
+    This class exists to solve the irritating problem raised by cgi.parse_qs,
+    which returns a list for every key, even though most Web forms submit
+    single name-value pairs.
 
-    An attempt has been made to provide an interface similar to other frameworks.
-
-    These frameworks include Flask/Bottle/Django.
+    This data structure is a modified Django implementation.
 
     """
-    def __init__(self, iterable=None):
-        # type: (Iterable) -> None
-        self._data = {}
-        if iterable:
-            self.update(iterable)
+    def __init__(self, mapping=None):
+        if isinstance(mapping, MultiValueDict):
+            dict.__init__(self, ((k, l[:]) for k, l in mapping.lists()))
+        elif isinstance(mapping, dict):
+            tmp = {}
+            for key, value in iteritems(mapping):
+                if isinstance(value, (tuple, list)):
+                    if len(value) == 0:
+                        continue
+                    value = list(value)
+                else:
+                    value = [value]
+                tmp[key] = value
+            dict.__init__(self, tmp)
+        else:
+            tmp = {}
+            for key, value in mapping or ():
+                tmp.setdefault(key, []).append(value)
+            dict.__init__(self, tmp)
 
-    def __len__(self):
-        return len(self._data)
+    def __getstate__(self):
+        # type: () -> Dict[Hashable, List[Any]]
+        return dict(self.lists())
 
-    def __contains__(self, item):
+    def __setstate__(self, value):
+        dict.clear(self)
+        dict.update(self, value)
+
+    def __getitem__(self, key):
+        # type: (Hashable) -> Any
+        """
+        Return the last data value for this key, or [] if it's an empty list;
+        raise KeyError if not found.
+        """
         try:
-            return len(self._data[item]) > 0
-        except KeyError:
-            return False
+            return dict.__getitem__(self, key)[-1]
+        except LookupError:
+            raise MultiValueDictKeyError(key)
 
-    def __getitem__(self, item):
-        try:
-            return self._data[item][0]
-        except IndexError:
-            raise KeyError(item)
+    def __setitem__(self, key, value):
+        # type: (Hashable, Any) -> None
+        """
+        Like :meth:`add` but removes an existing key first.
 
-    def __str__(self):
-        return repr(self._data)
+        :param key: the key for the value.
+        :param value: the value to set.
+
+        """
+        dict.__setitem__(self, key, [value])
+
+    def __copy__(self):
+        return self.copy()
+
+    def __deepcopy__(self, memo):
+        return self.deepcopy(memo=memo)
 
     def __repr__(self):
-        return repr(self._data)
+        return '%s(%r)' % (self.__class__.__name__, list(self.items(multi=True)))
 
-    def copy(self):
-        # type: () -> MultiDict
+    def add(self, key, value):
+        # type: (Hashable, Any) -> None
         """
-        Create a copy of the multi-dict.
+        Adds a new value for the key.
+
+        :param key: the key for the value.
+        :param value: the value to add.
+
         """
-        new = MultiDict({})
-        new._data = self._data.copy()
-        return new
+        dict.setdefault(self, key, []).append(value)
 
-    def update(self, iterable):
-        # type: (Union[Dict[Hashable, Any], Iterable[Tuple[Hashable, Any]]]) -> None
-
-        if isinstance(iterable, dict):
-            iterable = iterable.items()
-        else:
-            # Assume iterable will raise an Type error if not.
-            iterable = iter(iterable)
-
-        data = self._data
-        for idx, item in enumerate(iterable):
-            try:
-                k, v = item
-            except (TypeError, ValueError):
-                try:
-                    raise ValueError(
-                        "multi-dictionary update sequence element #{} has length {}; 2 is required".format(
-                            idx, len(item))
-                    )
-                except TypeError:
-                    raise ValueError(
-                        "multi-dictionary update sequence element #{} is not a sequence type.".format(idx)
-                    )
-            else:
-                l = data.setdefault(k, [])
-                if isinstance(v, (list, tuple)):
-                    l.extend(v)
-                else:
-                    l.append(v)
-
-    def has_key(self, k):
-        # type: (Hashable) -> bool
-        return k in self
-
-    def get(self, k, default=None, type=None):
-        # type: (Hashable, Any, Callable) -> Any
+    def get(self, key, default=None, type=None):
         """
-        Get a first item with optional type conversion.
-
-        Returns the default on failure.
+        Return the last data value for the passed key. If key doesn't exist
+        or value is an empty list, return `default`.
         """
         try:
-            v = self._data[k][0]
-        except LookupError:
+            rv = self[key]
+        except KeyError:
             return default
-
-        if type:
+        if type is not None:
             try:
-                v = type(v)
+                rv = type(rv)
             except ValueError:
-                return default
+                rv = default
+        return rv
 
-        return v
+    def getlist(self, key, type=None):
+        # type: (Hashable, Callable) -> List[Any]
+        """
+        Return the list of items for a given key. If that key is not in the
+        `MultiDict`, the return value will be an empty list.  Just as `get`
+        `getlist` accepts a `type` parameter.  All items will be converted
+        with the callable defined there.
 
-    def getlist(self, key):
-        # type: (Hashable) -> List[Any]
-        """
-        Get list of all values associated with a particular key.
-        """
-        return self._data.get(key) or []
-
-    def keys(self):
-        # type: () -> Iterable[Hashable]
-        """
-        Iterable of all keys
-        """
-        return self._data.keys()
-
-    def values(self, multi=False):
-        # type: (bool) -> Iterable[Any]
-        """
-        Yield first value in each key (analogous to a builtin dict).
-
-        If `multi=True` will yield all values.
+        :param key: The key to be looked up.
+        :param type: A callable that is used to cast the value in the
+                     :class:`MultiDict`.  If a :exc:`ValueError` is raised
+                     by this callable the value will be removed from the list.
+        :return: a :class:`list` of all the values for the key.
 
         """
-        for value in self._data.values():
-            if multi:
-                for v in value:
-                    yield v
-            else:
-                if value:
-                    yield value[0]
+        try:
+            rv = dict.__getitem__(self, key)
+        except KeyError:
+            return []
+        if type is None:
+            return list(rv)
+        result = []
+        for item in rv:
+            try:
+                result.append(type(item))
+            except ValueError:
+                pass
+        return result
 
-    def lists(self):
-        # type: () -> Iterable[List[Any]]
+    def setlist(self, key, new_list):
+        # type: (Hashable, List[Any]) -> None
         """
-        Similar to `dict.values`, but yields a lists of values associated with each key.
+        Remove the old values for a key and add new ones.  Note that the list
+        you pass the values in will be shallow-copied before it is inserted in
+        the dictionary.
+        >>> d = MultiValueDict()
+        >>> d.setlist('foo', ['1', '2'])
+        >>> d['foo']
+        '1'
+        >>> d.getlist('foo')
+        ['1', '2']
+        :param key: The key for which the values are set.
+        :param new_list: An iterable with the new values for the key.  Old values
+                         are removed first.
         """
-        for v in self._data.values():
-            if v:
-                yield v
+        dict.__setitem__(self, key, list(new_list))
+
+    def setdefault(self, key, default=None):
+        # type: (Hashable, Any) -> Any
+        """
+        Returns the value for the key if it is in the dict, otherwise it
+        returns `default` and sets that value for `key`.
+
+        :param key: The key to be looked up.
+        :param default: The default value to be returned if the key is not
+                        in the dict.  If not further specified it's `None`.
+
+        """
+        if key not in self:
+            self[key] = default
+        else:
+            default = self[key]
+        return default
+
+    def setlistdefault(self, key, default_list=None):
+        # type: (Hashable, List[Any]) -> List[Any]
+        """
+        Like `setdefault` but sets multiple values.  The list returned
+        is not a copy, but the list that is actually used internally.  This
+        means that you can put new values into the dict by appending items
+        to the list:
+        >>> d = MultiValueDict({"foo": 1})
+        >>> d.setlistdefault("foo").extend([2, 3])
+        >>> d.getlist("foo")
+        [1, 2, 3]
+
+        :param key: The key to be looked up.
+        :param default_list: An iterable of default values.  It is either copied
+                             (in case it was a list) or converted into a list
+                             before returned.
+        :return: a :class:`list`
+
+        """
+        if key not in self:
+            default_list = list(default_list or ())
+            dict.__setitem__(self, key, default_list)
+        else:
+            default_list = dict.__getitem__(self, key)
+        return default_list
 
     def items(self, multi=False):
-        # type: (bool) -> Iterable[Tuple[Hashable, Any]]
+        # type: (bool) -> Iterator[Tuple[Hashable, Any]]
         """
-        Yield key and first value (analogous to a builtin dict).
+        Return an iterator of ``(key, value)`` pairs.
 
-        If `multi=True` will yield key and value pairs for every value.
-
+        :param multi: If set to `True` the iterator returned will have a pair
+                      for each value of each key.  Otherwise it will only
+                      contain pairs for the lasted added of each key.
         """
-        for k, i in self._data.items():
+        for key, values in iteritems(self):
             if multi:
-                for v in i:
-                    yield k, v
+                for value in values:
+                    yield key, value
             else:
-                if i:
-                    yield k, i[0]
+                yield key, values[-1]
 
-    def itemlists(self):
-        # type: () -> Iterable[Tuple[Hashable, List[Any]]]
+    def sorteditems(self, multi=False):
+        # type: (bool) -> Iterator[Tuple[Hashable, Any]]
         """
-        Yield key, list pairs for each key.
+        Return an iterator of ``(key, value)`` pairs, sorted by key.
+
+        :param multi: If set to `True` the iterator returned will have a pair
+                      for each value of each key.  Otherwise it will only
+                      contain pairs for the lasted added of each key.
+
         """
-        return self._data.items()
+        for key in sorted(dict.keys(self)):
+            if multi:
+                for value in self.getlist(key):
+                    yield key, value
+            else:
+                yield key, self[key]
+
+    def lists(self):
+        # type: () -> Iterator[Tuple[Hashable, List[Any]]]
+        """
+        Return a list of ``(key, values)`` pairs, where values is the list
+        of all values associated with the key.
+        """
+        for key, values in iteritems(self):
+            yield key, list(values)
+
+    def values(self, multi=False):
+        # type: (bool) -> Iterator[Any]
+        """
+        Yield the last value on every key list.
+
+        :param multi: If set to `True` the iterator returned will have a pair
+                      for each value of each key.  Otherwise it will only
+                      contain pairs for the lasted added of each key.
+
+        """
+        for values in itervalues(self):
+            if multi:
+                for value in values:
+                    yield value
+            else:
+                yield values[-1]
+
+    def listvalues(self):
+        # type: (bool) -> Iterator[List[Any]]
+        """
+        Return an iterator of all values associated with a key.  Zipping
+        :meth:`keys` and this is the same as calling :meth:`lists`:
+
+        >>> d = MultiValueDict({"foo": [1, 2, 3]})
+        >>> zip(d.keys(), d.listvalues()) == d.lists()
+        True
+
+        """
+        return itervalues(self)
+
+    def copy(self):
+        """Return a shallow copy of this object."""
+        return self.__class__(self)
+
+    def deepcopy(self, memo=None):
+        """Return a deep copy of this object."""
+        return self.__class__(copy.deepcopy(self.to_dict(flat=False), memo))
+
+    def to_dict(self, flat=True):
+        """
+        Return the contents as regular dict.  If `flat` is `True` the
+        returned dict will only have the first item present, if `flat` is
+        `False` all values will be returned as lists.
+
+        :param flat: If set to `False` the dict returned will have lists
+                     with all the values in it.  Otherwise it will only
+                     contain the last value for each key.
+        :return: a :class:`dict`
+
+        """
+        if flat:
+            return dict(iteritems(self))
+        return dict(self.lists())
+
+    def pop(self, key, default=NotDefined):
+        # type: (Hashable, Any) -> Any
+        """
+        Pop the last item for a list on the dict.  Afterwards the
+        key is removed from the dict, so additional values are discarded:
+        >>> d = MultiValueDict({"foo": [1, 2, 3]})
+        >>> d.pop("foo")
+        1
+        >>> "foo" in d
+        False
+
+        :param key: the key to pop.
+        :param default: if provided the value to return if the key was
+                        not in the dictionary.
+        """
+        try:
+            return dict.pop(self, key)[-1]
+        except LookupError:
+            if default is NotDefined:
+                raise MultiValueDictKeyError(key)
+            return default
+
+    def popitem(self):
+        # type: () -> Tuple[Hashable, Any]
+        """Pop an item from the dict."""
+        k, v = dict.popitem(self)
+        try:
+            return k, v[-1]
+        except IndexError:
+            raise MultiValueDictKeyError("Dict is empty")
+
+    def poplist(self, key):
+        # type: (Hashable) -> List[Any]
+        """
+        Pop the list for a key from the dict.  If the key is not in the dict
+        an empty list is returned.
+        """
+        return dict.pop(self, key, [])
+
+    def popitemlist(self):
+        """Pop a ``(key, list)`` tuple from the dict."""
+        return dict.popitem(self)
