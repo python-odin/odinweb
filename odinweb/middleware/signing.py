@@ -5,7 +5,8 @@ from __future__ import absolute_import
 
 import logging
 
-from typing import Callable
+# Typing imports
+from typing import Callable  # noqa
 
 from .. import signing
 from ..exceptions import PermissionDenied, SigningError

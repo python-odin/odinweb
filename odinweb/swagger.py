@@ -19,7 +19,7 @@ import os
 
 # Imported for typing support
 from typing import List, Dict, Any, Union, Tuple  # noqa
-from .data_structures import PathParam
+from .data_structures import PathParam  # noqa
 
 from odin import fields
 from odin.utils import getmeta, lazy_property, force_tuple
