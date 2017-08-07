@@ -7,8 +7,7 @@ from collections import namedtuple
 from odin.utils import getmeta, lazy_property, force_tuple
 
 # Imports for typing support
-from typing import Dict, Union, Optional, Callable, Any, AnyStr, Iterable, List, Tuple, Hashable, Generator, \
-    Iterator  # noqa
+from typing import Dict, Union, Optional, Callable, Any, AnyStr, List, Tuple, Hashable, Iterator  # noqa
 from odin import Resource  # noqa
 
 from . import _compat

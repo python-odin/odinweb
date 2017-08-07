@@ -1,5 +1,5 @@
 # Type imports
-from typing import Iterable, Callable, Any, Optional
+from typing import Iterable, Callable, Any, Optional  # noqa
 
 from odin.exceptions import CodecDecodeError, ResourceException
 

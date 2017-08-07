@@ -8,10 +8,11 @@ Additional decorators for improving documentation of APIs.
 # Included for type support
 from typing import Callable, Optional  # noqa
 from odin import Resource  # noqa
+from .constants import HTTPStatus  # noqa
+from .data_structures import Param  # noqa
 
 from . import _compat
-from .constants import HTTPStatus
-from .data_structures import Param, Response, DefaultResource
+from .data_structures import Response, DefaultResource
 from .utils import make_decorator
 
 __all__ = ('deprecated', 'add_param', 'response', 'produces')

@@ -17,7 +17,9 @@ To enable add the :py:class:`SwaggerSpec` resource API into your API::
 import collections
 import os
 
+# Imported for typing support
 from typing import List, Dict, Any, Union, Tuple  # noqa
+from .data_structures import PathParam
 
 from odin import fields
 from odin.utils import getmeta, lazy_property, force_tuple
@@ -27,7 +29,7 @@ from . import resources
 from ._compat import binary_type
 from .constants import HTTPStatus, Type
 from .containers import ResourceApi, CODECS
-from .data_structures import PathParam, UrlPath, Param, HttpResponse, NoPath
+from .data_structures import UrlPath, Param, HttpResponse, NoPath
 from .decorators import Operation
 from .exceptions import HttpError
 from .utils import dict_filter

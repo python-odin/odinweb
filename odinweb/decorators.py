@@ -9,8 +9,8 @@ from __future__ import absolute_import
 
 # Imports for typing support
 from typing import Callable, Union, Tuple, Dict, Any, Optional, Generator, List, Set  # noqa
+from odin import Resource  # noqa
 
-from odin import Resource
 from odin.utils import force_tuple, lazy_property
 
 from .constants import HTTPStatus, Method, Type

@@ -10,10 +10,8 @@ import base64
 import hashlib
 import hmac
 
-from time import time
-
 from odinweb.data_structures import MultiValueDict
-
+from time import time
 try:
     from urllib.parse import urlencode, urlparse, parse_qs
 except ImportError:
@@ -21,7 +19,7 @@ except ImportError:
     from urlparse import parse_qs, urlparse
 
 # Type imports
-from typing import Callable, Dict
+from typing import Callable, Dict  # noqa
 
 from . import _compat
 from .exceptions import SigningError

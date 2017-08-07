@@ -7,7 +7,8 @@ Collection of Mocks and Tools for testing APIs.
 """
 from __future__ import absolute_import
 
-from typing import Dict, Any
+# Imports to support typing
+from typing import Dict, Any  # noqa
 
 from odin.codecs import json_codec
 try:
@@ -29,7 +30,7 @@ class MockRequest(object):
     def from_uri(cls, uri, post=None, headers=None, method=Method.GET, body='',
                  request_codec=None, response_codec=None):
         # type: (str, Dict[str, str], Dict[str, str], Method, str, Any, Any) -> MockRequest
-        scheme, netloc, path, params, query, fragment = urlparse(uri)
+        scheme, netloc, path, _, query, _ = urlparse(uri)
         return cls(scheme, netloc, path, parse_qs(query), post, headers, method, body, request_codec, response_codec)
 
     def __init__(self, scheme='http', host='127.0.0.1', path=None, query=None, headers=None, method=Method.GET,
