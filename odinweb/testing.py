@@ -48,7 +48,7 @@ class MockRequest(object):
         self.response_codec = response_codec or json_codec
 
 
-def test_request_proxy(request_proxy):
+def check_request_proxy(request_proxy):
     """
     A set of standard tests for Request Proxies.
 
@@ -66,7 +66,8 @@ def test_request_proxy(request_proxy):
         ('POST', MultiValueDict),
         ('body', None),
     ):
-        assert hasattr(request_proxy, attr)
+        assert hasattr(request_proxy, attr), "Missing attribute: {}".format(attr)
         obj = getattr(request_proxy, attr)
         if expected_type:
-            assert isinstance(obj, expected_type), "Expected {} to be {}, got {}.".format(attr, expected_type, type(obj))
+            assert isinstance(obj, expected_type), "Expected {} attribute type {} got {}.".format(
+                attr, expected_type, type(obj))
