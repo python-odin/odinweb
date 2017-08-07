@@ -665,6 +665,8 @@ class MultiValueDict(dict):
             else:
                 yield key, values[-1]
 
+    iteritems = items
+
     def sorteditems(self, multi=False):
         # type: (bool) -> Iterator[Tuple[Hashable, Any]]
         """
@@ -708,6 +710,8 @@ class MultiValueDict(dict):
             else:
                 yield values[-1]
 
+    itervalues = values
+
     def listvalues(self):
         # type: (bool) -> Iterator[List[Any]]
         """
@@ -742,7 +746,7 @@ class MultiValueDict(dict):
 
         """
         if flat:
-            return dict(iteritems(self))
+            return dict(self.items())
         return dict(self.lists())
 
     def pop(self, key, default=NotDefined):
