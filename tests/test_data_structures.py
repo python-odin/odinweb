@@ -428,6 +428,7 @@ class TestMultiDict(object):
         (['ab', 'cd'], {'a': ['b'], 'c': ['d']}),
         ({'foo': 'a', 'bar': 'b'}, {'foo': ['a'], 'bar': ['b']}),
         ({'foo': ['a', 'b'], 'bar': 'c'}, {'foo': ['a', 'b'], 'bar': ['c']}),
+        ({'foo': ['a', 'b'], 'bar': 'c', 'eek': []}, {'foo': ['a', 'b'], 'bar': ['c']}),
         ((('foo', 'a'), ('bar', 'b')), {'foo': ['a'], 'bar': ['b']}),
         ((('foo', 'a'), ('bar', 'b'), ('foo', 'c')), {'foo': ['a', 'c'], 'bar': ['b']}),
         ((('foo', 'ab'), ('bar', 'c')), {'foo': ['ab'], 'bar': ['c']}),
@@ -460,13 +461,15 @@ class TestMultiDict(object):
     @pytest.mark.parametrize('attr, args, expected', (
         ('__getitem__', ['foo'], 'b'),
         ('__getitem__', ['bar'], '1'),
-        ('copy', [], MultiValueDict(data)),
+        ('__copy__', [], MultiValueDict(data)),
         ('get', ['foo'], 'b'),
         ('get', ['bar'], '1'),
         ('get', ['boo'], None),
         ('get', ['boo', 'z'], 'z'),
         ('get', ['foo', 'z', int], 'z'),
         ('get', ['bar', 'z', int], 1),
+        ('setdefault', ['foo', 'z'], 'b'),
+        ('setdefault', ['boo', 'z'], 'z'),
         ('to_dict', [True], {'foo': 'b', 'bar': '1', 'eek': 'e'}),
         ('to_dict', [False], {'foo': ['a', 'b'], 'bar': ['1'], 'eek': ['c', 'd', 'e']}),
     ))
@@ -475,22 +478,40 @@ class TestMultiDict(object):
         assert actual == expected
 
     @pytest.mark.parametrize('attr, args, expected', (
-        ('getlist', ['foo'], ['a', 'b']),
-        ('getlist', ['boo'], []),
-        ('getlist', ['bar', int], [1]),
+        ('getlist', ['foo'], {'a', 'b'}),
+        ('getlist', ['boo'], set()),
+        ('getlist', ['bar', int], {1}),
+        ('setlistdefault', ['foo', ['z']], {'a', 'b'}),
+        ('setlistdefault', ['boo', ['z']], {'z'}),
+        ('values', [False], {'b', '1', 'e'}),
+        ('values', [True], {'a', 'b', '1', 'c', 'd', 'e'}),
     ))
     def test_get_list(self, sample_data, attr, args, expected):
         actual = getattr(sample_data, attr)(*args)
-        assert list(actual) == expected
+        assert set(actual) == expected
 
-    @pytest.mark.parametrize('attr, kwargs, expected', (
-        ('', {}, {}),
+    @pytest.mark.parametrize('attr, args, expected', (
+        ('__setitem__', ['boo', 'z'], {'bar': ['1'], 'boo': ['z'], 'eek': ['c', 'd', 'e'], 'foo': ['a', 'b']}),
+        ('setlist', ['foo', ['x', 'y']], {'bar': ['1'], 'eek': ['c', 'd', 'e'], 'foo': ['x', 'y']}),
+        ('setlist', ['boo', ['a', 'b']], {'bar': ['1'], 'boo': ['a', 'b'], 'eek': ['c', 'd', 'e'], 'foo': ['a', 'b']}),
+        ('add', ['bar', 'z'], {'bar': ['1', 'z'], 'eek': ['c', 'd', 'e'], 'foo': ['a', 'b']}),
+        ('setdefault', ['foo', 'z'], {'bar': ['1'], 'eek': ['c', 'd', 'e'], 'foo': ['a', 'b']}),
+        ('setdefault', ['boo', 'z'], {'bar': ['1'], 'boo': ['z'], 'eek': ['c', 'd', 'e'], 'foo': ['a', 'b']}),
+        ('setlistdefault', ['foo', ['z']], {'bar': ['1'], 'eek': ['c', 'd', 'e'], 'foo': ['a', 'b']}),
+        ('setlistdefault', ['boo', ['z']], {'bar': ['1'], 'boo': ['z'], 'eek': ['c', 'd', 'e'], 'foo': ['a', 'b']}),
     ))
-    def test_set_single(self, sample_data, attr, kwargs, expected):
-        pass
+    def test_set(self, sample_data, attr, args, expected):
+        getattr(sample_data, attr)(*args)
+        actual = sample_data.to_dict(flat=False)
+        assert actual == expected
 
-    @pytest.mark.parametrize('attr, kwargs, expected', (
-        ('', {}, {}),
+    @pytest.mark.parametrize('attr, args, expected, expected_data', (
+        ('pop', ['foo'], 'b', {'bar': ['1'], 'eek': ['c', 'd', 'e']}),
+        ('pop', ['boo', 'z'], 'z', {'bar': ['1'], 'eek': ['c', 'd', 'e'], 'foo': ['a', 'b']}),
+        ('poplist', ['foo'], ['a', 'b'], {'bar': ['1'], 'eek': ['c', 'd', 'e']}),
     ))
-    def test_set_list(self, sample_data, attr, kwargs, expected):
-        pass
+    def test_get_set(self, sample_data, attr, args, expected, expected_data):
+        actual = getattr(sample_data, attr)(*args)
+        actual_data = sample_data.to_dict(flat=False)
+        assert actual == expected
+        assert actual_data == expected_data

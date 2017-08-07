@@ -525,9 +525,6 @@ class MultiValueDict(dict):
     def __copy__(self):
         return self.copy()
 
-    def __deepcopy__(self, memo):
-        return self.deepcopy(memo=memo)
-
     def __repr__(self):
         return '%s(%r)' % (self.__class__.__name__, list(self.items(multi=True)))
 
@@ -711,7 +708,7 @@ class MultiValueDict(dict):
 
     itervalues = values
 
-    def listvalues(self):
+    def valuelists(self):
         # type: (bool) -> Iterator[List[Any]]
         """
         Return an iterator of all values associated with a key.  Zipping
@@ -727,10 +724,6 @@ class MultiValueDict(dict):
     def copy(self):
         """Return a shallow copy of this object."""
         return self.__class__(self)
-
-    def deepcopy(self, memo=None):
-        """Return a deep copy of this object."""
-        return self.__class__(copy.deepcopy(self.to_dict(flat=False), memo))
 
     def to_dict(self, flat=True):
         """
