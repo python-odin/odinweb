@@ -7,6 +7,7 @@ Collection of Mocks and Tools for testing APIs.
 """
 from __future__ import absolute_import
 
+from collections import MutableMapping
 # Imports to support typing
 from typing import Dict, Any  # noqa
 
@@ -61,7 +62,7 @@ def check_request_proxy(request_proxy):
         ('host', str),
         ('path', None),
         ('GET', MultiValueDict),
-        ('headers', dict),
+        ('headers', (dict, MutableMapping)),
         ('method', Method),
         ('POST', MultiValueDict),
         ('body', None),
