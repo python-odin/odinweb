@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 
-import copy
 import re
 
 from collections import namedtuple
@@ -545,7 +544,7 @@ class MultiValueDict(dict):
         """
         dict.setdefault(self, key, []).append(value)
 
-    def get(self, key, default=None, type=None):
+    def get(self, key, default=None, type_=None):
         """
         Return the last data value for the passed key. If key doesn't exist
         or value is an empty list, return `default`.
@@ -554,14 +553,14 @@ class MultiValueDict(dict):
             rv = self[key]
         except KeyError:
             return default
-        if type is not None:
+        if type_ is not None:
             try:
-                rv = type(rv)
+                rv = type_(rv)
             except ValueError:
                 rv = default
         return rv
 
-    def getlist(self, key, type=None):
+    def getlist(self, key, type_=None):
         # type: (Hashable, Callable) -> List[Any]
         """
         Return the list of items for a given key. If that key is not in the
@@ -570,7 +569,7 @@ class MultiValueDict(dict):
         with the callable defined there.
 
         :param key: The key to be looked up.
-        :param type: A callable that is used to cast the value in the
+        :param type_: A callable that is used to cast the value in the
                      :class:`MultiDict`.  If a :exc:`ValueError` is raised
                      by this callable the value will be removed from the list.
         :return: a :class:`list` of all the values for the key.
@@ -580,12 +579,12 @@ class MultiValueDict(dict):
             rv = dict.__getitem__(self, key)
         except KeyError:
             return []
-        if type is None:
+        if type_ is None:
             return list(rv)
         result = []
         for item in rv:
             try:
-                result.append(type(item))
+                result.append(type_(item))
             except ValueError:
                 pass
         return result
@@ -721,7 +720,7 @@ class MultiValueDict(dict):
         :meth:`keys` and this is the same as calling :meth:`lists`:
 
         >>> d = MultiValueDict({"foo": [1, 2, 3]})
-        >>> zip(d.keys(), d.listvalues()) == d.lists()
+        >>> zip(d.keys(), d.valuelists()) == d.lists()
         True
 
         """
