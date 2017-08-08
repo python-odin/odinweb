@@ -768,15 +768,6 @@ class MultiValueDict(dict):
                 raise MultiValueDictKeyError(key)
             return default
 
-    def popitem(self):
-        # type: () -> Tuple[Hashable, Any]
-        """Pop an item from the dict."""
-        k, v = dict.popitem(self)
-        try:
-            return k, v[-1]
-        except IndexError:
-            raise MultiValueDictKeyError("Dict is empty")
-
     def poplist(self, key):
         # type: (Hashable) -> List[Any]
         """
@@ -784,7 +775,3 @@ class MultiValueDict(dict):
         an empty list is returned.
         """
         return dict.pop(self, key, [])
-
-    def popitemlist(self):
-        """Pop a ``(key, list)`` tuple from the dict."""
-        return dict.popitem(self)
