@@ -7,6 +7,7 @@ Collection of Mocks and Tools for testing APIs.
 """
 from __future__ import absolute_import
 
+from collections import MutableMapping
 # Imports to support typing
 from typing import Dict, Any  # noqa
 
@@ -61,13 +62,13 @@ def check_request_proxy(request_proxy):
         ('host', str),
         ('path', None),
         ('GET', MultiValueDict),
-        ('headers', dict),
+        ('headers', (dict, MutableMapping)),
         ('method', Method),
         ('POST', MultiValueDict),
         ('body', None),
     ):
-        assert hasattr(request_proxy, attr), "Missing attribute: {}".format(attr)
+        assert hasattr(request_proxy, attr), "{} instance missing attribute {}.".format(request_proxy.__class__, attr)
         obj = getattr(request_proxy, attr)
         if expected_type:
-            assert isinstance(obj, expected_type), "Expected {} attribute type {} got {}.".format(
-                attr, expected_type, type(obj))
+            assert isinstance(obj, expected_type), "Incorrect type of {}.{}; expected {} got {}.".format(
+                request_proxy.__class__, attr, expected_type, type(obj))

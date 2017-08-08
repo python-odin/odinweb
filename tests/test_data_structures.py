@@ -4,7 +4,7 @@ import pytest
 import sys
 
 from odinweb.data_structures import HttpResponse, UrlPath, PathParam, _to_swagger, Param, Response, DefaultResponse, \
-    MiddlewareList, DefaultResource, MultiValueDict
+    MiddlewareList, DefaultResource, MultiValueDict, MultiValueDictKeyError
 from odinweb.constants import Type, HTTPStatus, In
 
 from .resources import User
@@ -478,17 +478,31 @@ class TestMultiDict(object):
         assert actual == expected
 
     @pytest.mark.parametrize('attr, args, expected', (
-        ('getlist', ['foo'], {'a', 'b'}),
-        ('getlist', ['boo'], set()),
-        ('getlist', ['bar', int], {1}),
-        ('setlistdefault', ['foo', ['z']], {'a', 'b'}),
-        ('setlistdefault', ['boo', ['z']], {'z'}),
-        ('values', [False], {'b', '1', 'e'}),
-        ('values', [True], {'a', 'b', '1', 'c', 'd', 'e'}),
+        ('getlist', ['foo'], ['a', 'b']),
+        ('getlist', ['boo'], []),
+        ('getlist', ['bar', int], [1]),
+        ('getlist', ['foo', int], []),
+        ('setlistdefault', ['foo', ['z']], ['a', 'b']),
+        ('setlistdefault', ['boo', ['z']], ['z']),
+        ('items', [False], [('foo', 'b'), ('bar', '1'), ('eek', 'e')]),
+        ('items', [True], [('foo', 'a'), ('foo', 'b'), ('bar', '1'), ('eek', 'c'), ('eek', 'd'), ('eek', 'e')]),
+        ('sorteditems', [False], [('foo', 'b'), ('bar', '1'), ('eek', 'e')]),
+        ('sorteditems', [True], [('foo', 'a'), ('foo', 'b'), ('bar', '1'), ('eek', 'c'), ('eek', 'd'), ('eek', 'e')]),
+        ('lists', [], [('foo', ['a', 'b']), ('bar', ['1']), ('eek', ['c', 'd', 'e'])]),
+        ('values', [False], ['b', '1', 'e']),
+        ('values', [True], ['a', 'b', '1', 'c', 'd', 'e']),
+        ('valuelists', [], [['a', 'b'], ['1'], ['c', 'd', 'e']]),
     ))
     def test_get_list(self, sample_data, attr, args, expected):
-        actual = getattr(sample_data, attr)(*args)
-        assert set(actual) == expected
+        actual = list(getattr(sample_data, attr)(*args))
+
+        # Match without order (as order is not defined by dicts prior to Python 3.6)
+        assert len(actual) == len(expected)
+        for item in actual:
+            assert item in expected
+            idx = expected.index(item)
+            assert idx != -1, "Item {} not found in expected.".format(item)
+            expected.pop(idx)
 
     @pytest.mark.parametrize('attr, args, expected', (
         ('__setitem__', ['boo', 'z'], {'bar': ['1'], 'boo': ['z'], 'eek': ['c', 'd', 'e'], 'foo': ['a', 'b']}),
@@ -515,3 +529,18 @@ class TestMultiDict(object):
         actual_data = sample_data.to_dict(flat=False)
         assert actual == expected
         assert actual_data == expected_data
+
+    def test_sorteditems(self, sample_data):
+        actual = list(sample_data.sorteditems(False))
+        assert actual == [('bar', '1'), ('eek', 'e'), ('foo', 'b')]
+
+        actual = list(sample_data.sorteditems(True))
+        assert actual == [('bar', '1'), ('eek', 'c'), ('eek', 'd'), ('eek', 'e'), ('foo', 'a'), ('foo', 'b')]
+
+    @pytest.mark.parametrize('attr, args', (
+        ('__getitem__', ['boo']),
+        ('pop', ['boo']),
+    ))
+    def test_key_errors(self, sample_data, attr, args):
+        with pytest.raises(MultiValueDictKeyError):
+            getattr(sample_data, attr)(*args)

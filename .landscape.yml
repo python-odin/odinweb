@@ -3,3 +3,6 @@ python-targets:
 max-line-length: 120
 ignore-paths:
   - odinweb/_compat
+pylint:
+  disable:
+    - too-many-arguments
