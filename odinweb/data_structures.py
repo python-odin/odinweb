@@ -469,7 +469,13 @@ class MultiValueDict(dict):
     which returns a list for every key, even though most Web forms submit
     single name-value pairs.
 
-    This data structure is a modified Django implementation.
+    This data structure is based off Flask and Django implementations. The
+    main differences are as follows:
+
+    - Unlike Flask the last added value is used this is the same same
+      behaviour as Django/Bottle
+    - Includes Flask/Bottle type conversions
+    - Includes pop methods not supported by Django
 
     """
     def __init__(self, mapping=None):
