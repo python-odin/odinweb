@@ -1,3 +1,4 @@
+import datetime
 import enum
 
 from odin import fields
@@ -12,15 +13,16 @@ except ImportError:
 
 class Method(enum.Enum):
     """
-    Well known HTTP methods
+    Well known HTTP methods (defined in Swagger Spec)
     """
     GET = 'GET'
     PUT = 'PUT'
-    HEAD = 'HEAD'
     POST = 'POST'
-    PATCH = 'PATCH'
     DELETE = 'DELETE'
     OPTIONS = 'OPTIONS'
+    HEAD = 'HEAD'
+    PATCH = 'PATCH'
+    TRACE = 'TRACE'
 
 
 class PathType(enum.Enum):
@@ -46,20 +48,27 @@ class Type(str, enum.Enum):
     """
     API Data type definitions
     """
-    def __new__(cls, value, native_type, odin_field):
+    def __new__(cls, value, format_, native_type, odin_field):
         obj = str.__new__(cls, value)
         obj._value_ = value
 
+        obj.format = format_
         obj.native_type = native_type
         obj.odin_field = odin_field
         return obj
 
-    String = "string", str, fields.StringField
-    Number = "number", float, fields.FloatField
-    Integer = "integer", int, fields.IntegerField
-    Boolean = "boolean", bool, fields.BooleanField
-    # Array = "array", list, fields.ListField
-    # File = "file", str, fields.StringField
+    Integer = "integer", "int32", int, fields.IntegerField
+    Long = "integer", "int64", int, fields.IntegerField
+    Float = "number", "float", float, fields.FloatField
+    Double = "number", "double", float, fields.FloatField
+    String = "string", None, str, fields.StringField
+    Byte = "string", "byte", bytes, fields.StringField
+    Binary = "string", "binary", bytes, fields.StringField
+    Boolean = "boolean", None, bool, fields.BooleanField
+    Date = "string", "date", datetime.date, fields.DateField
+    Time = "string", "time", datetime.time, fields.TimeField   # Not standard part of Swagger
+    DateTime = "string", "date-time", datetime.datetime, fields.DateTimeField
+    Password = "string", "password", str, fields.StringField
 
 
 PATH_STRING_RE = r'[-\w.~,!%]+'
