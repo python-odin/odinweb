@@ -60,3 +60,14 @@ class Type(str, enum.Enum):
     Boolean = "boolean", bool, fields.BooleanField
     # Array = "array", list, fields.ListField
     # File = "file", str, fields.StringField
+
+
+PATH_STRING_RE = r'[-\w.~,!%]+'
+"""
+Regular expression for a "string" in a URL path.
+
+This includes all `Unreserved Characters <https://tools.ietf.org/html/rfc3986#section-2.3>`_ 
+from URL Syntax RFC as well as a selection of sub-delims from 
+`Reserved Characters <https://tools.ietf.org/html/rfc3986#section-2.2>`_.
+
+"""
