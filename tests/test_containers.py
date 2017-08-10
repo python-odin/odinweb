@@ -38,7 +38,7 @@ class UserApi(containers.ResourceApi):
         self.calls.append('get_item')
         return User(resource_id, 'Dave')
 
-    @api.action(url_path='start', methods=Method.POST)
+    @api.action(path='start', methods=Method.POST)
     def start_item(self, request):
         self.calls.append('start_item')
         return create_response(request, status=202)

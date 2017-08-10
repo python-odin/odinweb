@@ -26,7 +26,7 @@ class TestOperation(object):
         assert target.methods == (Method.GET,)
 
     def test_str(self):
-        @decorators.Operation(url_path="test/{id}/start")
+        @decorators.Operation(path="test/{id}/start")
         def target(request):
             """
             Test target
@@ -35,7 +35,7 @@ class TestOperation(object):
         assert "tests.test_decorators.target - GET test/{id:Integer}/start" == str(target)
 
     def test_repr(self):
-        @decorators.Operation(url_path="test/{id}/start")
+        @decorators.Operation(path="test/{id}/start")
         def target(request):
             """
             Test target

@@ -57,19 +57,19 @@ class Operation(object):
             return instance
         return inner(func) if func else inner
 
-    def __init__(self, callback, url_path=NoPath, methods=Method.GET, resource=None, tags=None, summary=None,
+    def __init__(self, callback, path=NoPath, methods=Method.GET, resource=None, tags=None, summary=None,
                  middleware=None):
         # type: (Callable, Union[UrlPath, str, PathParam], Union[Method, Tuple[Method]], Resource, Tags, str, List[Any]) -> None
         """
         :param callback: Function we are routing
-        :param url_path: A sub path that can be used as a action.
+        :param path: A sub path that can be used as a action.
         :param methods: HTTP method(s) this function responses to.
         :param resource: Specify the resource that this function encodes/decodes,
             default is the one specified on the ResourceAPI instance.
         :param tags: Tags to be applied to operation
         """
         self.base_callback = self.callback = callback
-        self.url_path = UrlPath.from_object(url_path)
+        self.url_path = UrlPath.from_object(path)
         self.methods = force_tuple(methods)
         self._resource = resource
 

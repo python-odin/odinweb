@@ -18,7 +18,7 @@ class TestSignedAuth(object):
 
         target = signing.FixedSignedAuth(base64.b32decode('DEADBEEF'))
 
-        @Operation(url_path=UrlPath.parse('/foo/bar'), middleware=[target])
+        @Operation(path=UrlPath.parse('/foo/bar'), middleware=[target])
         def callback(r):
             return 'ok'
 
@@ -31,7 +31,7 @@ class TestSignedAuth(object):
 
         target = signing.FixedSignedAuth(None)
 
-        @Operation(url_path=UrlPath.parse('/foo/bar'), middleware=[target])
+        @Operation(path=UrlPath.parse('/foo/bar'), middleware=[target])
         def callback(request):
             return 'ok'
 
@@ -55,7 +55,7 @@ class TestSignedAuth(object):
 
         target = signing.FixedSignedAuth(base64.b32decode('DEADBEEF'))
 
-        @Operation(url_path=UrlPath.parse('/foo/bar'), middleware=[target])
+        @Operation(path=UrlPath.parse('/foo/bar'), middleware=[target])
         def callback(request):
             return 'ok'
 

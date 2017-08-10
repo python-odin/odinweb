@@ -85,7 +85,7 @@ class TestSwaggerSpec(object):
         assert actual == expected
 
     def test_parse_operations(self):
-        @Operation(url_path="a/{b:String}", methods=Method.POST, resource=User)
+        @Operation(path="a/{b:String}", methods=Method.POST, resource=User)
         def my_func(request, b):
             pass
 
