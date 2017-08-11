@@ -99,7 +99,8 @@ def _to_swagger(base=None, description=None, resource=None, options=None):
     return definition
 
 
-PATH_NODE_RE = re.compile(r'^{([\w_]+)(?::([\w_]+))?}$')
+# Naming scheme that follows standard python naming rules for variables/methods
+PATH_NODE_RE = re.compile(r'^{([a-zA-Z][a-zA-Z0-9_]*)(?::([a-zA-Z][a-zA-Z0-9_]*))?}$')
 
 
 class UrlPath(object):
