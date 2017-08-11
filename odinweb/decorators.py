@@ -311,41 +311,34 @@ class ResourceOperation(Operation):
 
 # Shortcut methods
 
-def listing(callback, resource=None, default_limit=50, max_limit=None, tags=None, summary="List resources"):
+def listing(callback=None, path=None, method=Method.GET, resource=None, default_limit=50, max_limit=None, tags=None,
+            summary="List resources"):
+    # type: (Callable, Union[UrlPath, str, PathParam], Method, Any, int, int, Union[str, List[str]], str) -> Operation
     """
     Decorator to configure an operation that returns a list of resources.
-
-    :param callback: Operation callback
-    :param resource: Specify the resources that operation returns. Default is the resource specified on the bound
-        `ResourceAPI` instance.
-    :param default_limit: Default limit on responses; defaults to 50.
-    :param max_limit: Maximum limit value.
-    :param tags: Any tags to apply to operation.
-    :param summary: Summary of the operation.
-
     """
     def inner(c):
-        op = ListOperation(c, NoPath, Method.GET, resource, tags, summary,
+        op = ListOperation(c, path or NoPath, method, resource, tags, summary,
                            default_limit=default_limit, max_limit=max_limit)
         op.responses.add(Response(HTTPStatus.OK, "Listing of resources", Listing))
         return op
     return inner(callback) if callback else inner
 
 
-def create(callback, path=None, method=Method.POST, resource=None, tags=None, summary="Create a new resource"):
+def create(callback=None, path=None, method=Method.POST, resource=None, tags=None, summary="Create a new resource"):
     # type: (Callable, Union[UrlPath, str, PathParam], Method, Any, Union[str, List[str]], str) -> Operation
     """
     Decorator to configure an operation that creates a resource.
     """
     def inner(c):
-        op = ResourceOperation(callback, path or NoPath, method, resource, tags, summary)
+        op = ResourceOperation(c, path or NoPath, method, resource, tags, summary)
         op.responses.add(Response(HTTPStatus.CREATED, "{name} has been created"))
         op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
         return op
     return inner(callback) if callback else inner
 
 
-def detail(callback, path=None, method=Method.GET, resource=None, tags=None, summary="Get specified resource."):
+def detail(callback=None, path=None, method=Method.GET, resource=None, tags=None, summary="Get specified resource."):
     # type: (Callable, Union[UrlPath, str, PathParam], Method, Any, Union[str, List[str]], str) -> Operation
     """
     Decorator to configure an operation that fetches a resource.
@@ -358,7 +351,7 @@ def detail(callback, path=None, method=Method.GET, resource=None, tags=None, sum
     return inner(callback) if callback else inner
 
 
-def update(callback, path=None, method=Method.PUT, resource=None, tags=None, summary="Update specified resource."):
+def update(callback=None, path=None, method=Method.PUT, resource=None, tags=None, summary="Update specified resource."):
     # type: (Callable, Union[UrlPath, str, PathParam], Method, Any, Union[str, List[str]], str) -> Operation
     """
     Decorator to configure an operation that updates a resource.
@@ -372,7 +365,7 @@ def update(callback, path=None, method=Method.PUT, resource=None, tags=None, sum
     return inner(callback) if callback else inner
 
 
-def patch(callback, path=None, method=Method.PATCH, resource=None, tags=None, summary="Patch specified resource."):
+def patch(callback=None, path=None, method=Method.PATCH, resource=None, tags=None, summary="Patch specified resource."):
     # type: (Callable, Union[UrlPath, str, PathParam], Method, Any, Union[str, List[str]], str) -> Operation
     """
     Decorator to configure an operation that patches a resource.
@@ -386,7 +379,7 @@ def patch(callback, path=None, method=Method.PATCH, resource=None, tags=None, su
     return inner(callback) if callback else inner
 
 
-def delete(callback, path=None, method=Method.DELETE, tags=None, summary="Delete specified resource."):
+def delete(callback=None, path=None, method=Method.DELETE, tags=None, summary="Delete specified resource."):
     # type: (Callable, Union[UrlPath, str, PathParam], Method, Union[str, List[str]], str) -> Operation
     """
     Decorator to configure an operation that deletes resource.
