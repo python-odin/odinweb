@@ -311,7 +311,6 @@ class ResourceOperation(Operation):
 
 # Shortcut methods
 
-@make_decorator
 def listing(callback, resource=None, default_limit=50, max_limit=None, tags=None, summary="List resources"):
     """
     Decorator to configure an operation that returns a list of resources.
@@ -325,97 +324,76 @@ def listing(callback, resource=None, default_limit=50, max_limit=None, tags=None
     :param summary: Summary of the operation.
 
     """
-    op = ListOperation(callback, NoPath, Method.GET, resource, tags, summary,
-                       default_limit=default_limit, max_limit=max_limit)
-    op.responses.add(Response(HTTPStatus.OK, "Listing of resources", Listing))
-    return op
+    def inner(c):
+        op = ListOperation(c, NoPath, Method.GET, resource, tags, summary,
+                           default_limit=default_limit, max_limit=max_limit)
+        op.responses.add(Response(HTTPStatus.OK, "Listing of resources", Listing))
+        return op
+    return inner(callback) if callback else inner
 
 
-@make_decorator
-def create(callback, resource=None, tags=None, summary="Create a new resource"):
+def create(callback, path=None, method=Method.POST, resource=None, tags=None, summary="Create a new resource"):
+    # type: (Callable, Union[UrlPath, str, PathParam], Method, Any, Union[str, List[str]], str) -> Operation
     """
     Decorator to configure an operation that creates a resource.
-
-    :param callback: Operation callback
-    :param resource: Specify the resource that operation accepts and returns. Default is the resource specified on the
-        bound `ResourceAPI` instance.
-    :param tags: Any tags to apply to operation.
-    :param summary: Summary of the operation.
-
     """
-    op = ResourceOperation(callback, NoPath, Method.POST, resource, tags, summary)
-    op.responses.add(Response(HTTPStatus.CREATED, "{name} has been created"))
-    op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
-    return op
+    def inner(c):
+        op = ResourceOperation(callback, path or NoPath, method, resource, tags, summary)
+        op.responses.add(Response(HTTPStatus.CREATED, "{name} has been created"))
+        op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
+        return op
+    return inner(callback) if callback else inner
 
 
-@make_decorator
-def detail(callback, resource=None, tags=None, summary="Get specified resource."):
+def detail(callback, path=None, method=Method.GET, resource=None, tags=None, summary="Get specified resource."):
+    # type: (Callable, Union[UrlPath, str, PathParam], Method, Any, Union[str, List[str]], str) -> Operation
     """
     Decorator to configure an operation that fetches a resource.
-
-    :param callback: Operation callback
-    :param resource: Specify the resource that operation returns. Default is the resource specified on the bound
-        `ResourceAPI` instance.
-    :param tags: Any tags to apply to operation.
-    :param summary: Summary of the operation.
-
     """
-    op = Operation(callback, PathParam('resource_id'), Method.GET, resource, tags, summary)
-    op.responses.add(Response(HTTPStatus.OK, "Get a {name}"))
-    op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
-    return op
+    def inner(c):
+        op = Operation(c, path or PathParam('resource_id'), method, resource, tags, summary)
+        op.responses.add(Response(HTTPStatus.OK, "Get a {name}"))
+        op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
+        return op
+    return inner(callback) if callback else inner
 
 
-@make_decorator
-def update(callback, resource=None, tags=None, summary="Update specified resource."):
+def update(callback, path=None, method=Method.PUT, resource=None, tags=None, summary="Update specified resource."):
+    # type: (Callable, Union[UrlPath, str, PathParam], Method, Any, Union[str, List[str]], str) -> Operation
     """
     Decorator to configure an operation that updates a resource.
-
-    :param callback: Operation callback
-    :param resource: Specify the resource that operation accepts and returns. Default is the resource specified on the
-        bound `ResourceAPI` instance.
-    :param tags: Any tags to apply to operation.
-    :param summary: Summary of the operation.
-
     """
-    op = ResourceOperation(callback, PathParam('resource_id'), Method.PUT, resource, tags, summary)
-    op.responses.add(Response(HTTPStatus.NO_CONTENT, "{name} has been updated."))
-    op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
-    op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
-    return op
+    def inner(c):
+        op = ResourceOperation(c, path or PathParam('resource_id'), method, resource, tags, summary)
+        op.responses.add(Response(HTTPStatus.NO_CONTENT, "{name} has been updated."))
+        op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
+        op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
+        return op
+    return inner(callback) if callback else inner
 
 
-@make_decorator
-def patch(callback, resource=None, tags=None, summary="Patch specified resource."):
+def patch(callback, path=None, method=Method.PATCH, resource=None, tags=None, summary="Patch specified resource."):
+    # type: (Callable, Union[UrlPath, str, PathParam], Method, Any, Union[str, List[str]], str) -> Operation
     """
     Decorator to configure an operation that patches a resource.
-
-    :param callback: Operation callback
-    :param resource: Specify the resource that operation partially accepts and returns. Default is the resource
-        specified on the bound `ResourceAPI` instance.
-    :param tags: Any tags to apply to operation.
-    :param summary: Summary of the operation.
-
     """
-    op = ResourceOperation(callback, PathParam('resource_id'), Method.PATCH, resource, tags, summary)
-    op.responses.add(Response(HTTPStatus.OK, "{name} has been patched."))
-    op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
-    op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
-    return op
+    def inner(c):
+        op = ResourceOperation(c, path or PathParam('resource_id'), method, resource, tags, summary)
+        op.responses.add(Response(HTTPStatus.OK, "{name} has been patched."))
+        op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
+        op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
+        return op
+    return inner(callback) if callback else inner
 
 
-@make_decorator
-def delete(callback, tags=None, summary="Delete specified resource."):
+def delete(callback, path=None, method=Method.DELETE, tags=None, summary="Delete specified resource."):
+    # type: (Callable, Union[UrlPath, str, PathParam], Method, Union[str, List[str]], str) -> Operation
     """
     Decorator to configure an operation that deletes resource.
-
-    :param callback: Operation callback
-    :param tags: Any tags to apply to operation.
-    :param summary: Summary of the operation.
-
     """
-    op = Operation(callback, PathParam('resource_id'), Method.DELETE, None, tags, summary)
-    op.responses.add(Response(HTTPStatus.NO_CONTENT, "{name} has been deleted.", None))
-    op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
-    return op
+    def inner(c):
+        op = Operation(c, path or PathParam('resource_id'), method, None, tags, summary)
+        op.responses.add(Response(HTTPStatus.NO_CONTENT, "{name} has been deleted.", None))
+        op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
+        return op
+    return inner(callback) if callback else inner
