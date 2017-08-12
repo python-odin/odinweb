@@ -71,29 +71,3 @@ def test_dict_filter_update(base, updates, expected):
 def test_dict_filter(args, kwargs, expected):
     actual = utils.dict_filter(*args, **kwargs)
     assert actual == expected
-
-
-@utils.make_decorator
-def offset(f, value=0):
-    """My Sample"""
-    def inner(*args):
-        return f(*args) + value
-    return inner
-
-
-def test_make_decorator():
-    assert offset.__doc__ == "My Sample"
-
-    @offset
-    def add(a, b):
-        """Add a to b"""
-        return a + b
-
-    assert 5 == add(2, 3)
-
-    @offset(1)
-    def subtract(a, b):
-        """Subtract b from a"""
-        return a - b
-
-    assert 2 == subtract(2, 1)

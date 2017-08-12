@@ -17,7 +17,7 @@ from .constants import HTTPStatus, Method, Type
 from .data_structures import NoPath, UrlPath, PathParam, Param, Response, DefaultResponse, MiddlewareList
 from .helpers import get_resource
 from .resources import Listing, Error
-from .utils import to_bool, dict_filter, make_decorator
+from .utils import to_bool, dict_filter
 
 __all__ = (
     'Operation', 'ListOperation', 'ResourceOperation',

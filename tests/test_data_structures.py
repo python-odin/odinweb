@@ -320,6 +320,15 @@ class TestParam(object):
 
         assert repr(target) == "Param('foo', <In.Query: 'query'>, <Type.Integer: 'integer'>, None, {'foo': 'bar'})"
 
+    @pytest.mark.parametrize('other, expected', (
+        (Param('foo', In.Path), True),
+        (Param('bar', In.Path), False),
+        (Param('foo', In.Body), False),
+        (123, NotImplemented),
+    ))
+    def test_eq(self, other, expected):
+        assert Param('foo', In.Path).__eq__(other) == expected
+
 
 class TestResponse(object):
     def test_hash(self):
@@ -346,8 +355,13 @@ class TestResponse(object):
 
         assert repr(target) == "Response(<HTTPStatus.OK: 200>, None, <class 'odinweb.data_structures.DefaultResource'>)"
 
-    def test_to_swagger(self):
-        pass
+    @pytest.mark.parametrize('other, expected', (
+        (Response(HTTPStatus.NOT_FOUND), True),
+        (Response(HTTPStatus.OK), False),
+        (123, NotImplemented),
+    ))
+    def test_eq(self, other, expected):
+        assert Response(HTTPStatus.NOT_FOUND).__eq__(other) == expected
 
     def test_to_swagger_default(self):
         target = DefaultResponse("Normal result")

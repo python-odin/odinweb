@@ -13,58 +13,63 @@ from .data_structures import Param  # noqa
 
 from . import _compat
 from .data_structures import Response, DefaultResource
-from .utils import make_decorator
 
 __all__ = ('deprecated', 'add_param', 'response', 'produces')
 
 
-@make_decorator
-def deprecated(operation):
+def deprecated(operation=None):
     """
     Mark an operation deprecated.
     """
-    operation.deprecated = True
+    def inner(o):
+        o.deprecated = True
+        return o
+    return inner(operation) if operation else inner
 
 
-@make_decorator
-def add_param(operation, param):
-    # type: (Param) -> None
+def add_param(param):
+    # type: (Param) -> Callable
     """
     Add parameter, you should probably use on of :meth:`path_param`, :meth:`query_param`,
     :meth:`body_param`, or :meth:`header_param`.
     """
-    try:
-        getattr(operation, 'parameters').add(param)
-    except AttributeError:
-        setattr(operation, 'parameters', {param})
+    def inner(o):
+        try:
+            getattr(o, 'parameters').add(param)
+        except AttributeError:
+            setattr(o, 'parameters', {param})
+        return o
+    return inner
 
 
-@make_decorator
-def response(operation, status, description, resource=DefaultResource):
-    # type: (Callable, HTTPStatus, str, Optional[Resource]) -> None
+def response(status, description, resource=DefaultResource):
+    # type: (HTTPStatus, str, Optional[Resource]) -> Callable
     """
     Define an expected responses.
 
     The values are based off `Swagger <https://swagger.io/specification>`_.
 
     """
-    value = Response(status, description, resource)
+    def inner(o):
+        value = Response(status, description, resource)
+        try:
+            getattr(o, 'responses').add(value)
+        except AttributeError:
+            setattr(o, 'responses', {value})
+        return o
+    return inner
 
-    try:
-        getattr(operation, 'responses').add(value)
-    except AttributeError:
-        setattr(operation, 'responses', {value})
 
-
-@make_decorator
-def produces(operation, *content_types):
+def produces(*content_types):
     """
     Define content types produced by an endpoint.
     """
-    if not all(isinstance(content_type, _compat.string_types) for content_type in content_types):
-        raise ValueError("In parameter not a valid value.")
-
-    try:
-        getattr(operation, 'produces').update(content_types)
-    except AttributeError:
-        setattr(operation, 'produces', set(content_types))
+    def inner(o):
+        if not all(isinstance(content_type, _compat.string_types) for content_type in content_types):
+            raise ValueError("In parameter not a valid value.")
+        try:
+            getattr(o, 'produces').update(content_types)
+        except AttributeError:
+            setattr(o, 'produces', set(content_types))
+        return o
+    return inner

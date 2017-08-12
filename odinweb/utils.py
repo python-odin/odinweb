@@ -11,10 +11,8 @@ import os
 import base64
 import itertools
 
-from functools import wraps
-
 # Typing imports
-from typing import Any, Callable  # noqa
+from typing import Any  # noqa
 
 from . import _compat
 
@@ -77,20 +75,6 @@ def dict_filter(*args, **kwargs):
     for arg in itertools.chain(args, (kwargs,)):
         dict_filter_update(result, arg)
     return result
-
-
-def make_decorator(decorator):
-    # type: (Callable) -> Callable
-    """
-    Convert a function into a decorator.
-    """
-    @wraps(decorator)
-    def wrapper(*args, **kwargs):
-        if args and callable(args[0]):
-            return decorator(*args, **kwargs) or args[0]
-        else:
-            return lambda f: decorator(f, *args, **kwargs) or f
-    return wrapper
 
 
 def sort_by_priority(iterable, reverse=False, default_priority=10):
