@@ -22,7 +22,7 @@ class TestOperation(object):
             """
 
         assert isinstance(target, decorators.Operation)
-        assert target.url_path is NoPath
+        assert target.url_path == NoPath
         assert target.methods == (Method.GET,)
 
     def test_str(self):
