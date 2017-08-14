@@ -96,19 +96,14 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
     """
     Base framework specific ResourceAPI implementations.
     """
+    api_name = None  # type: str
+    """
+    Name of the API endpoint
+    """
+
     resource = None
     """
     The resource this API is modelled on.
-    """
-
-    resource_id_type = Type.Integer
-    """
-    Resource ID type.
-    """
-
-    resource_id_name = 'resource_id'
-    """
-    Name of the resource ID field
     """
 
     path_prefix = UrlPath()
@@ -124,8 +119,8 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
     parent = None
 
     def __init__(self):
-        if not hasattr(self, 'api_name'):
-            self.api_name = "{}".format(getmeta(self.resource).name.lower())
+        if not self.api_name:
+            self.api_name = getmeta(self.resource).name.lower()
 
         # Append APIs name to path prefix
         self.path_prefix += self.api_name
@@ -201,8 +196,7 @@ class ApiContainer(object):
         Return all operations stored in containers.
         """
         if path_base:
-            if self.path_prefix:
-                path_base += self.path_prefix
+            path_base += self.path_prefix
         else:
             path_base = self.path_prefix or UrlPath()
 
