@@ -11,7 +11,7 @@ from __future__ import absolute_import
 from typing import Callable, Union, Tuple, Dict, Any, Optional, Generator, List, Set  # noqa
 from odin import Resource  # noqa
 
-from odin.utils import force_tuple, lazy_property
+from odin.utils import force_tuple, lazy_property, getmeta
 
 from .constants import HTTPStatus, Method, Type
 from .data_structures import NoPath, UrlPath, PathParam, Param, Response, DefaultResponse, MiddlewareList
@@ -126,15 +126,15 @@ class Operation(object):
         if isinstance(other, Operation):
             return all(
                 getattr(self, a) == getattr(other, a)
-                for a in ('url_path', 'methods')
+                for a in ('path', 'methods')
             )
         return NotImplemented
 
     def __str__(self):
-        return "{} - {} {}".format(self.operation_id, '|'.join(m.value for m in self.methods), self.url_path)
+        return "{} - {} {}".format(self.operation_id, '|'.join(m.value for m in self.methods), self.path)
 
     def __repr__(self):
-        return "Operation({!r}, {!r}, {})".format(self.operation_id, self.url_path, self.methods)
+        return "Operation({!r}, {!r}, {})".format(self.operation_id, self.path, self.methods)
 
     def execute(self, request, *args, **path_args):
         # type: (HttpRequest, tuple, Dict[Any]) -> Any
@@ -160,13 +160,20 @@ class Operation(object):
         """
         Yield operations paths stored in containers.
         """
-        url_path = self.url_path
+        url_path = self.path
         if path_prefix:
             url_path = path_prefix + url_path
 
         yield url_path, self
 
     @lazy_property
+    def path(self):
+        """
+        Prepared and setup URL Path.
+        """
+        return self.url_path.apply_args(id=self.key_field_name)
+
+    @property
     def resource(self):
         """
         Resource associated with operation.
@@ -175,6 +182,18 @@ class Operation(object):
             return self._resource
         elif self.binding:
             return self.binding.resource
+
+    @lazy_property
+    def key_field_name(self):
+        """
+        Field identified as the key.
+        """
+        name = 'resource_id'
+        if self.resource:
+            key_field = getmeta(self.resource).key_field
+            if key_field:
+                name = key_field.attname
+        return name
 
     @property
     def is_bound(self):
@@ -306,6 +325,9 @@ class ResourceOperation(Operation):
 
     def execute(self, request, *args, **path_args):
         item = get_resource(request, self.resource) if self.resource else None
+        # Don't allow key_field to be edited
+        if hasattr(item, self.key_field_name):
+            item = None
         return super(ResourceOperation, self).execute(request, item, *args, **path_args)
 
 
@@ -344,7 +366,7 @@ def detail(callback=None, path=None, method=Method.GET, resource=None, tags=None
     Decorator to configure an operation that fetches a resource.
     """
     def inner(c):
-        op = Operation(c, path or PathParam('resource_id'), method, resource, tags, summary)
+        op = Operation(c, path or PathParam('{id}'), method, resource, tags, summary)
         op.responses.add(Response(HTTPStatus.OK, "Get a {name}"))
         op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
         return op
@@ -357,7 +379,7 @@ def update(callback=None, path=None, method=Method.PUT, resource=None, tags=None
     Decorator to configure an operation that updates a resource.
     """
     def inner(c):
-        op = ResourceOperation(c, path or PathParam('resource_id'), method, resource, tags, summary)
+        op = ResourceOperation(c, path or PathParam('{id}'), method, resource, tags, summary)
         op.responses.add(Response(HTTPStatus.NO_CONTENT, "{name} has been updated."))
         op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
         op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
@@ -371,7 +393,7 @@ def patch(callback=None, path=None, method=Method.PATCH, resource=None, tags=Non
     Decorator to configure an operation that patches a resource.
     """
     def inner(c):
-        op = ResourceOperation(c, path or PathParam('resource_id'), method, resource, tags, summary)
+        op = ResourceOperation(c, path or PathParam('{id}'), method, resource, tags, summary)
         op.responses.add(Response(HTTPStatus.OK, "{name} has been patched."))
         op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
         op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
@@ -385,7 +407,7 @@ def delete(callback=None, path=None, method=Method.DELETE, tags=None, summary="D
     Decorator to configure an operation that deletes resource.
     """
     def inner(c):
-        op = Operation(c, path or PathParam('resource_id'), method, None, tags, summary)
+        op = Operation(c, path or PathParam('{id}'), method, None, tags, summary)
         op.responses.add(Response(HTTPStatus.NO_CONTENT, "{name} has been deleted.", None))
         op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
         return op
