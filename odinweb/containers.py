@@ -10,7 +10,8 @@ from __future__ import absolute_import
 import logging
 
 # Imports for typing support
-from typing import Callable, Union, Tuple, List, Any, Optional, Generator  # noqa
+import collections
+from typing import Union, Tuple, Any, Generator, Dict  # noqa
 from odin import Resource  # noqa
 
 from odin.codecs import json_codec
@@ -189,7 +190,7 @@ class ApiContainer(object):
         return inner
 
     def op_paths(self, path_base=None):
-        # type: (Optional[Union[str, UrlPath]]) -> List[Tuple[UrlPath, Operation]]
+        # type: (Union[str, UrlPath]) -> Generator[Tuple[UrlPath, Operation]]
         """
         Return all operations stored in containers.
         """
@@ -365,3 +366,27 @@ class ApiInterfaceBase(ApiContainer):
             # return a large array of errors.
             self.handle_500(request, ex)
             return HttpResponse("Error encoding response.", HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    def op_paths(self, path_base=None, collate_methods=False):
+        # type: (Union[str, UrlPath], bool) -> Union[Generator[Tuple[UrlPath, Operation]], Dict[UrlPath, Operation]]
+        """
+        Return all operations stored in containers.
+
+        Use the `collate_methods` option to collate methods by path. This is required for
+        certain web frameworks (eg Django) where it is up the developer to handle routing
+        of request method.
+        """
+        op_paths = super(ApiInterfaceBase, self).op_paths()
+
+        if collate_methods:
+            # Transform into a path -> method -> operation mapping.
+            paths = collections.OrderedDict()
+            for path, operation in op_paths:
+                methods = paths.setdefault(path, {})
+                for method in operation.methods:
+                    methods[method] = operation
+
+            return paths
+
+        else:
+            return op_paths
