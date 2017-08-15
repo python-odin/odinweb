@@ -204,7 +204,7 @@ class TestApiCollection(object):
     def test_register_operation(self):
         target = containers.ApiCollection()
 
-        @target.operation(url_path="a/b")
+        @target.operation("a/b")
         def my_operation(request):
             pass
 

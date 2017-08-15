@@ -172,11 +172,10 @@ class ApiContainer(object):
         if options:
             raise TypeError("Got an unexpected keyword argument(s) {}", options.keys())
 
-    def operation(self, func=None, url_path=None, methods=Method.GET, resource=None, tags=None):
-        # type: (Callable, UrlPath, Union(Method, Tuple[Method]), Type[Resource], Tags) -> Operation
+    def operation(self, path, methods=Method.GET, resource=None, tags=None):
+        # type: (UrlPath, Union(Method, Tuple[Method]), Type[Resource], Tags) -> Operation
         """
-        :param func: Function we are routing
-        :param url_path: A sub path that can be used as a action.
+        :param path: A sub path that can be used as a action.
         :param methods: HTTP method(s) this function responses to.
         :param resource: Specify the resource that this function encodes/decodes,
             default is the one specified on the ResourceAPI instance.
@@ -184,11 +183,10 @@ class ApiContainer(object):
 
         """
         def inner(callback):
-            operation = Operation(callback, url_path, methods, resource, tags)
+            operation = Operation(callback, path, methods, resource, tags)
             self.containers.append(operation)
             return operation
-
-        return inner(func) if func else inner
+        return inner
 
     def op_paths(self, path_base=None):
         # type: (Optional[Union[str, UrlPath]]) -> List[Tuple[UrlPath, Operation]]
