@@ -8,7 +8,7 @@ A collection of decorators for identifying the various types of route.
 from __future__ import absolute_import
 
 # Imports for typing support
-from typing import Callable, Union, Tuple, Dict, Any, Optional, Generator, List, Set  # noqa
+from typing import Callable, Union, Tuple, Dict, Any, Optional, Generator, List, Set, Iterable  # noqa
 from odin import Resource  # noqa
 
 from odin.utils import force_tuple, lazy_property, getmeta
@@ -59,7 +59,7 @@ class Operation(object):
 
     def __init__(self, callback, path=NoPath, methods=Method.GET, resource=None, tags=None, summary=None,
                  middleware=None):
-        # type: (Callable, Union[UrlPath, str, PathParam], Union[Method, Tuple[Method]], Resource, Tags, str, List[Any]) -> None
+        # type: (Callable, Union[UrlPath, str, PathParam], Union[Method, Iterable[Method]], Resource, Tags, str, List[Any]) -> None
         """
         :param callback: Function we are routing
         :param path: A sub path that can be used as a action.
