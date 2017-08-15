@@ -51,6 +51,7 @@ class UserApi(containers.ResourceApi):
 class MockResourceApi(object):
     def op_paths(self, path_base):
         yield path_base + UrlPath.parse('a/b'), Operation(mock_callback, UrlPath.parse('a/b'), Method.GET)
+        yield path_base + UrlPath.parse('a/b'), Operation(mock_callback, UrlPath.parse('a/b'), Method.POST)
         yield path_base + UrlPath.parse('d/e'), Operation(mock_callback, UrlPath.parse('d/e'), (Method.POST, Method.PATCH))
 
 
@@ -171,6 +172,7 @@ class TestApiContainer(object):
 
         assert actual == {
             UrlPath.parse('c/a/b'): Operation(mock_callback, 'a/b', Method.GET),
+            UrlPath.parse('c/a/b'): Operation(mock_callback, 'a/b', Method.POST),
             UrlPath.parse('c/d/e'): Operation(mock_callback, 'd/e', (Method.POST, Method.PATCH)),
         }
 
@@ -181,6 +183,7 @@ class TestApiContainer(object):
 
         assert actual == {
             UrlPath.parse('a/b'): Operation(mock_callback, 'a/b', Method.GET),
+            UrlPath.parse('a/b'): Operation(mock_callback, 'a/b', Method.POST),
             UrlPath.parse('d/e'): Operation(mock_callback, 'd/e', (Method.POST, Method.PATCH)),
         }
 
@@ -320,6 +323,32 @@ class TestApiInterfaceBase(object):
         assert actual.body == 'eek'
         assert actual.status == 200
 
+    def test_op_paths(self):
+        target = containers.ApiInterfaceBase(MockResourceApi())
+
+        actual = list(target.op_paths())
+
+        assert actual == [
+            (UrlPath.parse('/api/a/b'), Operation(mock_callback, 'a/b', Method.GET)),
+            (UrlPath.parse('/api/a/b'), Operation(mock_callback, 'a/b', Method.POST)),
+            (UrlPath.parse('/api/d/e'), Operation(mock_callback, 'd/e', (Method.POST, Method.PATCH))),
+        ]
+
+    def test_op_paths__collate_methods(self):
+        target = containers.ApiInterfaceBase(MockResourceApi())
+
+        actual = target.op_paths(collate_methods=True)
+
+        assert actual == {
+            UrlPath.parse('/api/a/b'): {
+                Method.GET: Operation(mock_callback, 'a/b', Method.GET),
+                Method.POST: Operation(mock_callback, 'a/b', Method.POST),
+            },
+            UrlPath.parse('/api/d/e'): {
+                Method.POST: Operation(mock_callback, 'd/e', (Method.POST, Method.PATCH)),
+                Method.PATCH: Operation(mock_callback, 'd/e', (Method.POST, Method.PATCH)),
+            }
+        }
 
 # # def test_nested_api():
 # #     user_api = UserApi()
