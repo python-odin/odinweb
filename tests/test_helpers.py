@@ -75,8 +75,8 @@ def test_get_resource__multiple():
     ('[{"id":10, "name": "Dave"}]', 40097),
     ('[]', 40097),
     ('{"$": "wrong.User", "id":10, "name": "Dave"}', 40098),
-    ('{"$": "tests.Group", "id":10, "name": "Dave"}', 40098),
-    ('[{"$": "tests.Group", "id":10, "name": "Dave"}]', 40098),
+    ('{"$": "tests.Group", "group_id":10, "name": "Dave"}', 40098),
+    ('[{"$": "tests.Group", "group_id":10, "name": "Dave"}]', 40098),
 ))
 def test_get_resource__codec_exceptions(body, error_code):
     request = MockRequest(body=body)

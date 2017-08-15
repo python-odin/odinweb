@@ -19,5 +19,5 @@ class Group(odin.Resource):
     class Meta:
         namespace = 'tests'
 
-    id = odin.IntegerField()
+    group_id = odin.IntegerField(key=True)
     name = odin.StringField()
