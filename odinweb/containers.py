@@ -274,6 +274,17 @@ class ApiInterfaceBase(ApiContainer):
         """
         Handle an *un-handled* exception.
         """
+        # Let middleware attempt to handle exception
+        try:
+            for middleware in self.middleware.handle_500:
+                resource = middleware(request, exception)
+                if resource:
+                    return resource
+
+        except Exception as ex:  # noqa - This is a top level handler
+            exception = ex
+
+        # Fallback to generic error
         logger.exception('Internal Server Error: %s', exception, extra={
             'status_code': 500,
             'request': request
@@ -343,7 +354,12 @@ class ApiInterfaceBase(ApiContainer):
                 # error processing, this often provides convenience features
                 # to aid in the debugging process.
                 raise
-            resource = self.handle_500(request, e)
+
+            resource = None
+            # Fallback to the default handler
+            if resource is None:
+                resource = self.handle_500(request, e)
+
             status = resource.status
 
         if isinstance(status, HTTPStatus):

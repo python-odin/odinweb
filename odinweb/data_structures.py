@@ -440,6 +440,14 @@ class MiddlewareList(list):
         return tuple(m.post_dispatch for m in middleware if hasattr(m, 'post_dispatch'))
 
     @lazy_property
+    def handle_500(self):
+        """
+        List of handle-error methods from registered middleware.
+        """
+        middleware = sort_by_priority(self, reverse=True)
+        return tuple(m.handle_500 for m in middleware if hasattr(m, 'handle_500'))
+
+    @lazy_property
     def post_swagger(self):
         """
         List of post-swagger methods from registered middleware.
