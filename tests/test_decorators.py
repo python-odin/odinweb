@@ -140,11 +140,10 @@ class TestListOperation(object):
         ({}, {'bare': 'T'}, 0, 50, True),
         ({}, {'bare': 'yes'}, 0, 50, True),
         ({}, {'offset': 10, 'limit': 20, 'bare': '1'}, 10, 20, True),
-        # Max offset/limit
+        # Max limit
         ({'max_limit': 100}, {}, 0, 50, False),
         ({'max_limit': 100}, {'offset': 10, 'limit': 100}, 10, 100, False),
         ({'max_limit': 100}, {'offset': 10, 'limit': 102}, 10, 100, False),
-        ({'max_limit': 100, 'max_offset': 10}, {'offset': 12, 'limit': 100}, 10, 100, False),
         # Silly values?
         ({}, {'offset': -1}, 0, 50, False),
         ({}, {'limit': -1}, 0, 1, False),

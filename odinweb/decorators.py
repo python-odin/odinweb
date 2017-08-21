@@ -8,7 +8,7 @@ A collection of decorators for identifying the various types of route.
 from __future__ import absolute_import
 
 # Imports for typing support
-from typing import Callable, Union, Tuple, Dict, Any, Optional, Generator, List, Set, Iterable  # noqa
+from typing import Callable, Union, Tuple, Dict, Any, Generator, List, Set, Iterable  # noqa
 from odin import Resource  # noqa
 
 from odin.utils import force_tuple, lazy_property, getmeta
@@ -28,7 +28,9 @@ __all__ = (
 )
 
 # Type definitions
-Tags = Union[str, Tuple[str]]
+Tags = Union[str, Iterable[str]]
+Methods = Union[Method, Iterable[Method]]
+Path = Union[UrlPath, str, PathParam]
 
 
 class Operation(object):
@@ -59,7 +61,7 @@ class Operation(object):
 
     def __init__(self, callback, path=NoPath, methods=Method.GET, resource=None, tags=None, summary=None,
                  middleware=None):
-        # type: (Callable, Union[UrlPath, str, PathParam], Union[Method, Iterable[Method]], Resource, Tags, str, List[Any]) -> None
+        # type: (Callable, Path, Methods, Resource, Tags, str, List[Any]) -> None
         """
         :param callback: Function we are routing
         :param path: A sub path that can be used as a action.
@@ -137,7 +139,7 @@ class Operation(object):
         return "Operation({!r}, {!r}, {})".format(self.operation_id, self.path, self.methods)
 
     def execute(self, request, *args, **path_args):
-        # type: (HttpRequest, tuple, Dict[Any]) -> Any
+        # type: (Any, tuple, Dict[Any]) -> Any
         """
         Execute the callback (binding callback if required)
         """
@@ -156,7 +158,7 @@ class Operation(object):
         self.middleware.append(instance)
 
     def op_paths(self, path_prefix=None):
-        # type: (Optional[Union[str, UrlPath]]) -> Generator[Tuple[UrlPath, Operation]]
+        # type: (Path) -> Generator[Tuple[UrlPath, Operation]]
         """
         Yield operations paths stored in containers.
         """
@@ -259,35 +261,45 @@ class ListOperation(Operation):
 
     """
     listing_resource = Listing
+    """
+    Resource used to wrap listings.
+    """
+
     default_offset = 0
+    """
+    Default offset if not specified.
+    """
+
     default_limit = 50
-    max_offset = None
+    """
+    Default limit of not specified.
+    """
+
     max_limit = None
+    """
+    Maximum limit.
+    """
 
     def __init__(self, *args, **kwargs):
         self.listing_resource = kwargs.pop('listing_resource', self.listing_resource)
         self.default_offset = kwargs.pop('default_offset', self.default_offset)
         self.default_limit = kwargs.pop('default_limit', self.default_limit)
-        self.max_offset = kwargs.pop('max_offset', self.max_offset)
         self.max_limit = kwargs.pop('max_limit', self.max_limit)
 
         super(ListOperation, self).__init__(*args, **kwargs)
 
         # Apply documentation
         self.parameters.add(Param.query('offset', Type.Integer, "Offset to start listing from.",
-                                        default=self.default_offset, maximum=self.max_offset))
+                                        default=self.default_offset))
         self.parameters.add(Param.query('limit', Type.Integer, "Limit on the number of listings returned.",
                                         default=self.default_limit, maximum=self.max_limit))
         self.parameters.add(Param.query('bare', Type.Boolean, "Return a plain list of objects."))
 
     def execute(self, request, *args, **path_args):
         # Get paging args from query string
-        max_offset = self.max_offset
         offset = int(request.GET.get('offset', self.default_offset))
         if offset < 0:
             offset = 0
-        elif max_offset and offset > max_offset:
-            offset = max_offset
         path_args['offset'] = offset
 
         max_limit = self.max_limit
@@ -333,53 +345,56 @@ class ResourceOperation(Operation):
 
 # Shortcut methods
 
-def listing(callback=None, path=None, method=Method.GET, resource=None, default_limit=50, max_limit=None, tags=None,
-            summary="List resources"):
-    # type: (Callable, Union[UrlPath, str, PathParam], Method, Any, int, int, Union[str, List[str]], str) -> Operation
+def listing(callback=None, path=None, method=Method.GET, resource=None, tags=None, summary="List resources",
+            middleware=None, default_limit=50, max_limit=None):
+    # type: (Callable, Path, Methods, Resource, Tags, str, List[Any], int, int) -> Operation
     """
     Decorator to configure an operation that returns a list of resources.
     """
     def inner(c):
-        op = ListOperation(c, path or NoPath, method, resource, tags, summary,
+        op = ListOperation(c, path or NoPath, method, resource, tags, summary, middleware,
                            default_limit=default_limit, max_limit=max_limit)
         op.responses.add(Response(HTTPStatus.OK, "Listing of resources", Listing))
         return op
     return inner(callback) if callback else inner
 
 
-def create(callback=None, path=None, method=Method.POST, resource=None, tags=None, summary="Create a new resource"):
-    # type: (Callable, Union[UrlPath, str, PathParam], Method, Any, Union[str, List[str]], str) -> Operation
+def create(callback=None, path=None, method=Method.POST, resource=None, tags=None, summary="Create a new resource",
+           middleware=None):
+    # type: (Callable, Path, Methods, Resource, Tags, str, List[Any]) -> Operation
     """
     Decorator to configure an operation that creates a resource.
     """
     def inner(c):
-        op = ResourceOperation(c, path or NoPath, method, resource, tags, summary)
+        op = ResourceOperation(c, path or NoPath, method, resource, tags, summary, middleware)
         op.responses.add(Response(HTTPStatus.CREATED, "{name} has been created"))
         op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
         return op
     return inner(callback) if callback else inner
 
 
-def detail(callback=None, path=None, method=Method.GET, resource=None, tags=None, summary="Get specified resource."):
-    # type: (Callable, Union[UrlPath, str, PathParam], Method, Any, Union[str, List[str]], str) -> Operation
+def detail(callback=None, path=None, method=Method.GET, resource=None, tags=None, summary="Get specified resource.",
+           middleware=None):
+    # type: (Callable, Path, Methods, Resource, Tags, str, List[Any]) -> Operation
     """
     Decorator to configure an operation that fetches a resource.
     """
     def inner(c):
-        op = Operation(c, path or PathParam('{id}'), method, resource, tags, summary)
+        op = Operation(c, path or PathParam('{id}'), method, resource, tags, summary, middleware)
         op.responses.add(Response(HTTPStatus.OK, "Get a {name}"))
         op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
         return op
     return inner(callback) if callback else inner
 
 
-def update(callback=None, path=None, method=Method.PUT, resource=None, tags=None, summary="Update specified resource."):
-    # type: (Callable, Union[UrlPath, str, PathParam], Method, Any, Union[str, List[str]], str) -> Operation
+def update(callback=None, path=None, method=Method.PUT, resource=None, tags=None, summary="Update specified resource.",
+           middleware=None):
+    # type: (Callable, Path, Methods, Resource, Tags, str, List[Any]) -> Operation
     """
     Decorator to configure an operation that updates a resource.
     """
     def inner(c):
-        op = ResourceOperation(c, path or PathParam('{id}'), method, resource, tags, summary)
+        op = ResourceOperation(c, path or PathParam('{id}'), method, resource, tags, summary, middleware)
         op.responses.add(Response(HTTPStatus.NO_CONTENT, "{name} has been updated."))
         op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
         op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
@@ -387,13 +402,14 @@ def update(callback=None, path=None, method=Method.PUT, resource=None, tags=None
     return inner(callback) if callback else inner
 
 
-def patch(callback=None, path=None, method=Method.PATCH, resource=None, tags=None, summary="Patch specified resource."):
-    # type: (Callable, Union[UrlPath, str, PathParam], Method, Any, Union[str, List[str]], str) -> Operation
+def patch(callback=None, path=None, method=Method.PATCH, resource=None, tags=None, summary="Patch specified resource.",
+          middleware=None):
+    # type: (Callable, Path, Methods, Resource, Tags, str, List[Any]) -> Operation
     """
     Decorator to configure an operation that patches a resource.
     """
     def inner(c):
-        op = ResourceOperation(c, path or PathParam('{id}'), method, resource, tags, summary)
+        op = ResourceOperation(c, path or PathParam('{id}'), method, resource, tags, summary, middleware)
         op.responses.add(Response(HTTPStatus.OK, "{name} has been patched."))
         op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
         op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
@@ -401,13 +417,14 @@ def patch(callback=None, path=None, method=Method.PATCH, resource=None, tags=Non
     return inner(callback) if callback else inner
 
 
-def delete(callback=None, path=None, method=Method.DELETE, tags=None, summary="Delete specified resource."):
-    # type: (Callable, Union[UrlPath, str, PathParam], Method, Union[str, List[str]], str) -> Operation
+def delete(callback=None, path=None, method=Method.DELETE, tags=None, summary="Delete specified resource.",
+           middleware=None):
+    # type: (Callable, Path, Methods, Tags, str, List[Any]) -> Operation
     """
     Decorator to configure an operation that deletes resource.
     """
     def inner(c):
-        op = Operation(c, path or PathParam('{id}'), method, None, tags, summary)
+        op = Operation(c, path or PathParam('{id}'), method, None, tags, summary, middleware)
         op.responses.add(Response(HTTPStatus.NO_CONTENT, "{name} has been deleted.", None))
         op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
         return op
