@@ -36,7 +36,7 @@ def resolve_content_type(type_resolvers, request):
             return content_type
 
 
-def get_resource(request, resource, allow_multiple=False):
+def get_resource(request, resource, allow_multiple=False, full_clean=True, default_to_not_supplied=False):
     """
     Get a resource instance from ``request.body``.
 
@@ -52,7 +52,8 @@ def get_resource(request, resource, allow_multiple=False):
             raise HttpError(HTTPStatus.BAD_REQUEST, 99, "Unable to decode request body.", str(ude))
 
     try:
-        instance = request.request_codec.loads(body, resource=resource, full_clean=True)
+        instance = request.request_codec.loads(body, resource=resource, full_clean=full_clean,
+                                               default_to_not_supplied=default_to_not_supplied)
 
     except ResourceException:
         raise HttpError(HTTPStatus.BAD_REQUEST, 98, "Invalid resource type.")
