@@ -330,16 +330,22 @@ class ResourceOperation(Operation):
     It is assumed decorator will operate on a class method.
     """
     def __init__(self, *args, **kwargs):
+        self.full_clean = kwargs.pop('full_clean', True)
+        self.default_to_not_supplied = kwargs.pop('default_to_not_supplied', False)
+
         super(ResourceOperation, self).__init__(*args, **kwargs)
 
         # Apply documentation
         self.parameters.add(Param.body('Expected resource supplied with request.'))
 
     def execute(self, request, *args, **path_args):
-        item = get_resource(request, self.resource) if self.resource else None
-        # Don't allow key_field to be edited
-        if hasattr(item, self.key_field_name):
-            item = None
+        item = None
+        if self.resource:
+            item = get_resource(request, self.resource, full_clean=self.full_clean,
+                                default_to_not_supplied=self.default_to_not_supplied)
+            # Don't allow key_field to be edited
+            if hasattr(item, self.key_field_name):
+                setattr(item, self.key_field_name, None)
         return super(ResourceOperation, self).execute(request, item, *args, **path_args)
 
 
@@ -409,7 +415,8 @@ def patch(callback=None, path=None, method=Method.PATCH, resource=None, tags=Non
     Decorator to configure an operation that patches a resource.
     """
     def inner(c):
-        op = ResourceOperation(c, path or PathParam('{id}'), method, resource, tags, summary, middleware)
+        op = ResourceOperation(c, path or PathParam('{id}'), method, resource, tags, summary, middleware,
+                               full_clean=False)
         op.responses.add(Response(HTTPStatus.OK, "{name} has been patched."))
         op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
         op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
