@@ -360,7 +360,7 @@ class Param(object):
             {
                 'name': self.name,
                 'in': self.in_.value,
-                'type': self.type.value if self.type else None,
+                'type': str(self.type) if self.type else None,
             },
             description=self.description,
             resource=bound_resource if self.resource is DefaultResource else self.resource,
