@@ -416,7 +416,7 @@ def patch(callback=None, path=None, method=Method.PATCH, resource=None, tags=Non
     """
     def inner(c):
         op = ResourceOperation(c, path or PathParam('{id}'), method, resource, tags, summary, middleware,
-                               full_clean=False)
+                               full_clean=False, default_to_not_supplied=True)
         op.responses.add(Response(HTTPStatus.OK, "{name} has been patched."))
         op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
         op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
