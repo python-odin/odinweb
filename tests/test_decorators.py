@@ -42,7 +42,7 @@ class TestOperation(object):
             """
 
         assert "Operation('tests.test_decorators.target', " \
-               "UrlPath('test', PathParam(name='id', type=<Type.Integer: 'integer'>, type_args=None), 'start'), " \
+               "UrlPath('test', PathParam(name='id', type=<Type.Integer: 'integer:int32'>, type_args=None), 'start'), " \
                "(<Method.GET: 'GET'>,))" == repr(target)
 
     def test_unbound(self):
