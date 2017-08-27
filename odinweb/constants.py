@@ -44,18 +44,24 @@ class In(enum.Enum):
     Form = 'formData'
 
 
-class Type(str, enum.Enum):
+class Type(enum.Enum):
     """
     API Data type definitions
     """
-    def __new__(cls, value, format_, native_type, odin_field):
-        obj = str.__new__(cls, value)
+    def __new__(cls, type_, format_, native_type, odin_field):
+        value = "{}:{}".format(type_, format_) if format_ else type_
+
+        obj = object.__new__(cls)
         obj._value_ = value
 
+        obj.type = type_
         obj.format = format_
         obj.native_type = native_type
         obj.odin_field = odin_field
         return obj
+
+    def __str__(self):
+        return self.type
 
     Integer = "integer", "int32", int, fields.IntegerField
     Long = "integer", "int64", int, fields.IntegerField
@@ -69,6 +75,7 @@ class Type(str, enum.Enum):
     Time = "string", "time", datetime.time, fields.TimeField   # Not standard part of Swagger
     DateTime = "string", "date-time", datetime.datetime, fields.DateTimeField
     Password = "string", "password", str, fields.StringField
+    Email = "string", "email", str, fields.EmailField   # Not standard part of Swagger
 
 
 PATH_STRING_RE = r'[-\w.~,!%]+'

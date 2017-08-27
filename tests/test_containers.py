@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import pytest
+from odinweb.resources import Error
 
 from odin.exceptions import ValidationError
 from odinweb import api
@@ -301,6 +302,37 @@ class TestApiInterfaceBase(object):
 
         with pytest.raises(ValueError):
             target.dispatch(operation, MockRequest())
+
+    def test_dispatch__error_handled_by_middleware(self):
+        class ErrorMiddleware(object):
+            def handle_500(self, request, exception):
+                assert isinstance(exception, ValueError)
+                return Error.from_status(HTTPStatus.SEE_OTHER, 0,
+                                         "Quick over there...")
+
+        def callback(request):
+            raise ValueError()
+
+        target = containers.ApiInterfaceBase(middleware=[ErrorMiddleware()])
+        operation = Operation(callback)
+
+        actual = target.dispatch(operation, MockRequest())
+        assert actual.status == 303
+
+    def test_dispatch__error_handled_by_middleware_raises_exception(self):
+        class ErrorMiddleware(object):
+            def handle_500(self, request, exception):
+                assert isinstance(exception, ValueError)
+                raise ValueError
+
+        def callback(request):
+            raise ValueError()
+
+        target = containers.ApiInterfaceBase(middleware=[ErrorMiddleware()])
+        operation = Operation(callback)
+
+        actual = target.dispatch(operation, MockRequest())
+        assert actual.status == 500
 
     def test_dispatch__encode_error_with_debug_enabled(self):
         def callback(request):

@@ -83,7 +83,7 @@ class Error(odin.Resource):
         help_text="HTTP status code of the response."
     )
     code = odin.IntegerField(
-        help_text="Custom application specific error code that references into"
+        help_text="Custom application specific error code that references into "
                   "the application."
     )
     message = odin.StringField(

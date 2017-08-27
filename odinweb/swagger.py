@@ -19,6 +19,8 @@ import os
 
 # Imported for typing support
 from typing import List, Dict, Any, Union, Tuple  # noqa
+
+from odin.fields.virtual import VirtualField
 from .data_structures import PathParam  # noqa
 
 from odin import fields
@@ -35,21 +37,26 @@ from .exceptions import HttpError
 from .utils import dict_filter
 
 
-SWAGGER_SPEC_TYPE_MAPPING = {t.odin_field: t for t in Type}
+SWAGGER_SPEC_TYPE_MAPPING = [
+    (fields.IntegerField, Type.Long),
+    (fields.FloatField, Type.Float),
+    (fields.EmailField, Type.Email),
+    (fields.StringField, Type.String),
+    (fields.TimeField, Type.Time),
+    (fields.DateField, Type.Date),
+    (fields.DateTimeField, Type.DateTime),
+    (fields.BooleanField, Type.Boolean),
+]
 """
 Mapping of fields to Swagger types.
 """
 
-SWAGGER_SPEC_FORMAT_MAPPING = {
-    fields.IntegerField: 'int64',
-    fields.FloatField: 'float',
-    fields.DateField: 'date',
-    fields.DateTimeField: 'date-time',
-    fields.NaiveTimeField: 'date-time',
-}
-"""
-Mapping of fields to Swagger formats.
-"""
+
+def map_field_to_type(field):
+    # type: (Any) -> Type
+    for field_type, type_ in SWAGGER_SPEC_TYPE_MAPPING:
+        if isinstance(field, field_type):
+            return type_
 
 
 def resource_definition(resource):
@@ -66,17 +73,22 @@ def resource_definition(resource):
     }
 
     for field in meta.all_fields:
-        field_definition = {
-            'type': SWAGGER_SPEC_TYPE_MAPPING.get(field.__class__, Type.String).value
-        }
+        field_definition = {}
 
-        if field.__class__ in SWAGGER_SPEC_FORMAT_MAPPING:
-            field_definition['format'] = SWAGGER_SPEC_FORMAT_MAPPING[field.__class__]
+        type_def = map_field_to_type(field)
+        if type_def:
+            field_definition['type'] = str(type_def)
+            if type_def.format:
+                field_definition['format'] = type_def.format
 
         if field.doc_text:
             field_definition['description'] = field.doc_text
 
-        if field.choices:
+        if isinstance(field, VirtualField):
+            field_definition['readOnly'] = True
+
+        # Use getattr to support calculated fields
+        if getattr(field, 'choices', None):
             field_definition['enum'] = [c[0] for c in field.choices]
 
         definition['properties'][field.name] = field_definition

@@ -360,7 +360,7 @@ class Param(object):
             {
                 'name': self.name,
                 'in': self.in_.value,
-                'type': self.type.value if self.type else None,
+                'type': str(self.type) if self.type else None,
             },
             description=self.description,
             resource=bound_resource if self.resource is DefaultResource else self.resource,
@@ -424,6 +424,14 @@ class MiddlewareList(list):
     List of middleware with filtering and sorting builtin.
     """
     @lazy_property
+    def pre_request(self):
+        """
+        List of pre-request methods from registered middleware.
+        """
+        middleware = sort_by_priority(self)
+        return tuple(m.pre_request for m in middleware if hasattr(m, 'pre_request'))
+
+    @lazy_property
     def pre_dispatch(self):
         """
         List of pre-dispatch methods from registered middleware.
@@ -438,6 +446,22 @@ class MiddlewareList(list):
         """
         middleware = sort_by_priority(self, reverse=True)
         return tuple(m.post_dispatch for m in middleware if hasattr(m, 'post_dispatch'))
+
+    @lazy_property
+    def handle_500(self):
+        """
+        List of handle-error methods from registered middleware.
+        """
+        middleware = sort_by_priority(self, reverse=True)
+        return tuple(m.handle_500 for m in middleware if hasattr(m, 'handle_500'))
+
+    @lazy_property
+    def post_request(self):
+        """
+        List of post_request methods from registered middleware.
+        """
+        middleware = sort_by_priority(self, reverse=True)
+        return tuple(m.post_request for m in middleware if hasattr(m, 'post_request'))
 
     @lazy_property
     def post_swagger(self):

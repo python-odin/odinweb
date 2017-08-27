@@ -318,7 +318,9 @@ class TestParam(object):
     def test_repr(self):
         target = Param('foo', In.Query, Type.Integer, foo='bar')
 
-        assert repr(target) == "Param('foo', <In.Query: 'query'>, <Type.Integer: 'integer'>, None, {'foo': 'bar'})"
+        assert (
+            repr(target) == "Param('foo', <In.Query: 'query'>, <Type.Integer: 'integer:int32'>, None, {'foo': 'bar'})"
+        )
 
     @pytest.mark.parametrize('other, expected', (
         (Param('foo', In.Path), True),
