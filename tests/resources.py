@@ -21,3 +21,7 @@ class Group(odin.Resource):
 
     group_id = odin.IntegerField(key=True)
     name = odin.StringField()
+
+    @odin.calculated_field
+    def title(self):
+        return self.name.title()

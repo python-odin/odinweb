@@ -8,21 +8,34 @@ from odinweb.decorators import Operation
 from odinweb.exceptions import HttpError
 from odinweb.testing import MockRequest
 
-from .resources import User
+from .resources import User, Group
 
 
-def test_resource_definition():
-    actual = swagger.resource_definition(User)
+class TestResourceDefinition:
+    def test_basic_definition(self):
+        actual = swagger.resource_definition(User)
 
-    assert actual == {
-        'type': 'object',
-        'properties': {
-            'id': {'type': 'integer', 'format': 'int64'},
-            'name': {'type': 'string'},
-            'email': {'type': 'string', 'description': 'Users email'},
-            'role': {'type': 'string', 'enum': ['admin', 'manager', 'user']},
+        assert actual == {
+            'type': 'object',
+            'properties': {
+                'id': {'type': 'integer', 'format': 'int64'},
+                'name': {'type': 'string'},
+                'email': {'type': 'string', 'format': 'email', 'description': 'Users email'},
+                'role': {'type': 'string', 'enum': ['admin', 'manager', 'user']},
+            }
         }
-    }
+
+    def test_with_calculated_field(self):
+        actual = swagger.resource_definition(Group)
+
+        assert actual == {
+            'type': 'object',
+            'properties': {
+                'group_id': {'type': 'integer', 'format': 'int64'},
+                'name': {'type': 'string'},
+                'title': {'readOnly': True},
+            }
+        }
 
 
 class TestSwaggerSpec(object):
@@ -131,8 +144,7 @@ class TestSwaggerSpec(object):
         )
 
         actual = target.get_swagger(request)
-
-        assert actual == {
+        expected = {
             'swagger': '2.0',
             'info': {
                 'title': 'Example',
@@ -149,7 +161,7 @@ class TestSwaggerSpec(object):
                     'type': 'object',
                     'properties': {
                         'code': {
-                            'description': 'Custom application specific error code that references intothe application.',
+                            'description': 'Custom application specific error code that references into the application.',
                             'type': 'integer', 'format': 'int64',
                         },
                         'developer_message': {
@@ -162,7 +174,6 @@ class TestSwaggerSpec(object):
                         },
                         'meta': {
                             'description': 'Additional meta information that can help solve errors.',
-                            'type': 'string'
                         },
                         'status': {
                             'description': 'HTTP status code of the response.',
@@ -183,7 +194,6 @@ class TestSwaggerSpec(object):
                         },
                         'results': {
                             'description': 'List of resources.',
-                            'type': 'string'
                         },
                         'total_count': {
                             'description': 'The total number of items in the result set.',
@@ -193,6 +203,7 @@ class TestSwaggerSpec(object):
                 }
             }
         }
+        assert actual == expected
 
     def test_load_static(self):
         target = swagger.SwaggerSpec("", enable_ui=True)
