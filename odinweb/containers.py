@@ -11,7 +11,7 @@ import logging
 
 # Imports for typing support
 import collections
-from typing import Union, Tuple, Any, Generator, Dict  # noqa
+from typing import Union, Tuple, Any, Generator, Dict, Type  # noqa
 from odin import Resource  # noqa
 
 from odin.codecs import json_codec
@@ -20,7 +20,7 @@ from odin.utils import getmeta
 
 from . import _compat
 from . import content_type_resolvers
-from .constants import Type, Method, HTTPStatus
+from .constants import Method, HTTPStatus
 from .data_structures import UrlPath, NoPath, HttpResponse, MiddlewareList
 from .decorators import Operation
 from .exceptions import ImmediateHttpResponse

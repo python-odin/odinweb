@@ -52,7 +52,7 @@ class Type(enum.Enum):
         value = "{}:{}".format(type_, format_) if format_ else type_
 
         obj = object.__new__(cls)
-        obj._value_ = value
+        obj._value_ = value  # noqa
 
         obj.type = type_
         obj.format = format_
