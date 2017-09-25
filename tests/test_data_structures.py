@@ -375,6 +375,9 @@ class TestResponse(object):
 
 
 class MiddlewareA(object):
+    def pre_request(self):
+        pass
+
     def pre_dispatch(self):
         pass
 
@@ -386,6 +389,9 @@ class MiddlewareB(object):
     def post_dispatch(self):
         pass
 
+    def handle_500(self):
+        pass
+
     def post_swagger(self):
         pass
 
@@ -393,16 +399,29 @@ class MiddlewareB(object):
 class MiddlewareC(object):
     priority = 5
 
+    def pre_request(self):
+        pass
+
     def pre_dispatch(self):
         pass
 
     def post_dispatch(self):
         pass
 
+    def post_request(self):
+        pass
+
 
 @pytest.mark.skipif(sys.version_info < (3, 0), reason="requires python3.x")
 class TestMiddlewareList(object):
     target = MiddlewareList((MiddlewareA(), MiddlewareB(), MiddlewareC()))
+
+    def test_pre_request(self):
+        count = 0
+        for actual, expected in zip(self.target.pre_request, (MiddlewareC, MiddlewareA)):
+            assert actual.__func__.__qualname__ == expected.pre_request.__qualname__
+            count += 1
+        assert count == 2
 
     def test_pre_dispatch(self):
         count = 0
@@ -415,6 +434,20 @@ class TestMiddlewareList(object):
         count = 0
         for actual, expected in zip(self.target.post_dispatch, (MiddlewareB,)):
             assert actual.__func__.__qualname__ == expected.post_dispatch.__qualname__
+            count += 1
+        assert count == 1
+
+    def test_handle_500(self):
+        count = 0
+        for actual, expected in zip(self.target.handle_500, (MiddlewareB,)):
+            assert actual.__func__.__qualname__ == expected.handle_500.__qualname__
+            count += 1
+        assert count == 1
+
+    def test_post_request(self):
+        count = 0
+        for actual, expected in zip(self.target.post_request, (MiddlewareC,)):
+            assert actual.__func__.__qualname__ == expected.post_request.__qualname__
             count += 1
         assert count == 1
 
