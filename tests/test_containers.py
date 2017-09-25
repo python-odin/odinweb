@@ -275,12 +275,24 @@ class TestApiInterfaceBase(object):
         assert actual.status == status
 
     def test_dispatch__with_middleware(self):
+        calls = []
+
         class Middleware(object):
+            def pre_request(self, request, path_args):
+                calls.append('pre_request')
+
             def pre_dispatch(self, request, path_args):
+                calls.append('pre_dispatch')
                 path_args['foo'] = 'bar'
 
             def post_dispatch(self, request, response):
+                calls.append('post_dispatch')
                 return 'eek' + response
+
+            def post_request(self, request, response):
+                calls.append('post_request')
+                response['test'] = 'header'
+                return response
 
         def callback(request, **args):
             assert args['foo'] == 'bar'
@@ -292,6 +304,8 @@ class TestApiInterfaceBase(object):
 
         assert actual.body == '"eekboo"'
         assert actual.status == 200
+        assert 'test' in actual.headers
+        assert calls == ['pre_request', 'pre_dispatch', 'post_dispatch', 'post_request']
 
     def test_dispatch__error_with_debug_enabled(self):
         def callback(request):

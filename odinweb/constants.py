@@ -52,7 +52,7 @@ class Type(enum.Enum):
         value = "{}:{}".format(type_, format_) if format_ else type_
 
         obj = object.__new__(cls)
-        obj._value_ = value
+        obj._value_ = value  # noqa
 
         obj.type = type_
         obj.format = format_
@@ -87,3 +87,12 @@ from URL Syntax RFC as well as a selection of sub-delims from
 `Reserved Characters <https://tools.ietf.org/html/rfc3986#section-2.2>`_.
 
 """
+
+# Headers for CORS
+
+CORS_ALLOW_CREDENTIALS = 'Access-Control-Allow-Credentials'
+CORS_ALLOW_HEADERS = 'Access-Control-Allow-Headers'
+CORS_ALLOW_METHODS = 'Access-Control-Allow-Methods'
+CORS_ALLOW_ORIGIN = 'Access-Control-Allow-Origin'
+CORS_EXPOSE_HEADERS = 'Access-Control-Expose-Headers'
+CORS_MAX_AGE = 'Access-Control-Max-Age'

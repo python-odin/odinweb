@@ -11,7 +11,7 @@ import logging
 
 # Imports for typing support
 import collections
-from typing import Union, Tuple, Any, Generator, Dict  # noqa
+from typing import Union, Tuple, Any, Generator, Dict, Type  # noqa
 from odin import Resource  # noqa
 
 from odin.codecs import json_codec
@@ -20,7 +20,7 @@ from odin.utils import getmeta
 
 from . import _compat
 from . import content_type_resolvers
-from .constants import Type, Method, HTTPStatus
+from .constants import Method, HTTPStatus
 from .data_structures import UrlPath, NoPath, HttpResponse, MiddlewareList
 from .decorators import Operation
 from .exceptions import ImmediateHttpResponse
@@ -265,6 +265,7 @@ class ApiInterfaceBase(ApiContainer):
         options.setdefault('path_prefix', UrlPath('', options['name']))
         self.debug_enabled = options.pop('debug_enabled', False)
         self.middleware = MiddlewareList(options.pop('middleware', []))
+        self.options = options.pop('options', True)
         super(ApiInterfaceBase, self).__init__(*containers, **options)
 
         if not self.path_prefix.is_absolute:
@@ -292,9 +293,57 @@ class ApiInterfaceBase(ApiContainer):
         return Error.from_status(HTTPStatus.INTERNAL_SERVER_ERROR, 0,
                                  "An unhandled error has been caught.")
 
-    def dispatch(self, operation, request, **path_args):
+    def dispatch_operation(self, operation, request, path_args):
         """
-        Dispatch incoming request to operation.
+        Dispatch and handle exceptions from operation.
+        """
+        try:
+            # path_args is passed by ref so changes can be made.
+            for middleware in self.middleware.pre_dispatch:
+                middleware(request, path_args)
+
+            resource = operation(request, path_args)
+
+            for middleware in self.middleware.post_dispatch:
+                resource = middleware(request, resource)
+
+        except ImmediateHttpResponse as e:
+            # An exception used to return a response immediately, skipping any
+            # further processing.
+            return e.resource, e.status, e.headers
+
+        except ValidationError as e:
+            # A validation error was raised by a resource.
+            if hasattr(e, 'message_dict'):
+                resource = Error.from_status(HTTPStatus.BAD_REQUEST, 0, "Failed validation", meta=e.message_dict)
+            else:
+                resource = Error.from_status(HTTPStatus.BAD_REQUEST, 0, str(e))
+            return resource, resource.status, None
+
+        except NotImplementedError:
+            resource = Error.from_status(HTTPStatus.NOT_IMPLEMENTED, 0, "The method has not been implemented")
+            return resource, resource.status, None
+
+        except Exception as e:
+            if self.debug_enabled:
+                # If debug is enabled then fallback to the frameworks default
+                # error processing, this often provides convenience features
+                # to aid in the debugging process.
+                raise
+
+            resource = None
+            # Fallback to the default handler
+            if resource is None:
+                resource = self.handle_500(request, e)
+
+            return resource, resource.status, None
+
+        else:
+            return resource, None, None
+
+    def _dispatch(self, operation, request, path_args):
+        """
+        Wrapped dispatch method, prepare request and generate a HTTP Response.
         """
         # Determine the request and response types. Ensure API supports the requested types
         request_type = resolve_content_type(self.request_type_resolvers, request)
@@ -319,48 +368,7 @@ class ApiInterfaceBase(ApiContainer):
             )
 
         # Response types
-        status = headers = None
-
-        try:
-            # path_args is passed by ref so changes can be made.
-            for middleware in self.middleware.pre_dispatch:
-                middleware(request, path_args)
-
-            resource = operation(request, path_args)
-
-            for middleware in self.middleware.post_dispatch:
-                resource = middleware(request, resource)
-
-        except ImmediateHttpResponse as e:
-            # An exception used to return a response immediately, skipping any
-            # further processing.
-            resource, status, headers = e.resource, e.status, e.headers
-
-        except ValidationError as e:
-            # A validation error was raised by a resource.
-            if hasattr(e, 'message_dict'):
-                resource = Error.from_status(HTTPStatus.BAD_REQUEST, 0, "Failed validation", meta=e.message_dict)
-            else:
-                resource = Error.from_status(HTTPStatus.BAD_REQUEST, 0, str(e))
-            status = resource.status
-
-        except NotImplementedError:
-            resource = Error.from_status(HTTPStatus.NOT_IMPLEMENTED, 0, "The method has not been implemented")
-            status = resource.status
-
-        except Exception as e:
-            if self.debug_enabled:
-                # If debug is enabled then fallback to the frameworks default
-                # error processing, this often provides convenience features
-                # to aid in the debugging process.
-                raise
-
-            resource = None
-            # Fallback to the default handler
-            if resource is None:
-                resource = self.handle_500(request, e)
-
-            status = resource.status
+        resource, status, headers = self.dispatch_operation(operation, request, path_args)
 
         if isinstance(status, HTTPStatus):
             status = status.value
@@ -370,18 +378,35 @@ class ApiInterfaceBase(ApiContainer):
             return resource
 
         # Encode the response
+        return create_response(request, resource, status, headers)
+
+    def dispatch(self, operation, request, **path_args):
+        """
+        Dispatch incoming request and capture top level exeptions.
+        """
+        # Add current operation to the request (for convenience in middleware methods)
+        request.current_operation = operation
+
         try:
-            return create_response(request, resource, status, headers)
+            for middleware in self.middleware.pre_request:
+                middleware(request, path_args)
+
+            response = self._dispatch(operation, request, path_args)
+
+            for middleware in self.middleware.post_request:
+                response = middleware(request, response)
+
         except Exception as ex:
             if self.debug_enabled:
                 # If debug is enabled then fallback to the frameworks default
                 # error processing, this often provides convenience features
                 # to aid in the debugging process.
                 raise
-            # Use a high level exception handler as the JSON codec can
-            # return a large array of errors.
             self.handle_500(request, ex)
-            return HttpResponse("Error encoding response.", HTTPStatus.INTERNAL_SERVER_ERROR)
+            return HttpResponse("Error processing response.", HTTPStatus.INTERNAL_SERVER_ERROR)
+
+        else:
+            return response
 
     def op_paths(self, path_base=None, collate_methods=False):
         # type: (Union[str, UrlPath], bool) -> Union[Generator[Tuple[UrlPath, Operation]], Dict[UrlPath, Operation]]
