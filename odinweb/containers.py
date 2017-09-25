@@ -297,9 +297,6 @@ class ApiInterfaceBase(ApiContainer):
         """
         Dispatch and handle exceptions from operation.
         """
-        # Add current operation to the request (for convenience in middleware methods)
-        request.current_operation = operation
-
         try:
             # path_args is passed by ref so changes can be made.
             for middleware in self.middleware.pre_dispatch:
@@ -387,6 +384,9 @@ class ApiInterfaceBase(ApiContainer):
         """
         Dispatch incoming request and capture top level exeptions.
         """
+        # Add current operation to the request (for convenience in middleware methods)
+        request.current_operation = operation
+
         try:
             for middleware in self.middleware.pre_request:
                 middleware(request, path_args)
