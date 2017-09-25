@@ -242,7 +242,18 @@ class Operation(object):
                 tags.update(binding_tags)
         return tags
 
-collection = collection_action = action = operation = Operation
+collection = collection_action = operation = Operation
+
+
+def action(callback=None, path=None, methods=Method.GET, resource=None, tags=None, summary="Get specified resource.",
+           middleware=None):
+    # type: (Callable, Path, Methods, Resource, Tags, str, List[Any]) -> Operation
+    """
+    Decorator to apply an action to a resource. An action is applied to a `detail` operation.
+    """
+    def inner(c):
+        return Operation(c, path or '{id}', methods, resource, tags, summary, middleware)
+    return inner(callback) if callback else inner
 
 
 class ListOperation(Operation):
