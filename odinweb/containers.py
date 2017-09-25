@@ -294,6 +294,12 @@ class ApiInterfaceBase(ApiContainer):
                                  "An unhandled error has been caught.")
 
     def dispatch_operation(self, operation, request, path_args):
+        """
+        Dispatch and handle exceptions from operation.
+        """
+        # Add current operation to the request (for convenience in middleware methods)
+        request.current_operation = operation
+
         try:
             # path_args is passed by ref so changes can be made.
             for middleware in self.middleware.pre_dispatch:
