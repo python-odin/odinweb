@@ -7,7 +7,6 @@ python:
 
 install:
   - travis_retry pip install -r requirements-dev.txt
-  - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then travis_retry pip install -r requirements-2.7.txt; fi
 
 script:
   - py.test tests/ --cov=odinweb
