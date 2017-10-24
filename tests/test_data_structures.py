@@ -105,6 +105,7 @@ class TestUrlPath(object):
         ('/a/b/', ('', 'a', 'b')),
         ('a/{b}/c', ('a', PathParam('b'), 'c')),
         ('a/{b:Integer}/c', ('a', PathParam('b', Type.Integer), 'c')),
+        ('a/{b:Regex:abc:123}/c', ('a', PathParam('b', Type.Regex, 'abc:123'), 'c')),
     ))
     def test_parse(self, path, expected):
         target = UrlPath.parse(path)

@@ -76,6 +76,7 @@ class Type(enum.Enum):
     DateTime = "string", "date-time", datetime.datetime, fields.DateTimeField
     Password = "string", "password", str, fields.StringField
     Email = "string", "email", str, fields.EmailField   # Not standard part of Swagger
+    Regex = "string", None, str, fields.StringField   # Not standard part of Swagger
 
 
 PATH_STRING_RE = r'[-\w.~,!%]+'

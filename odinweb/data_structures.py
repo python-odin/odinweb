@@ -2,11 +2,10 @@ from __future__ import absolute_import
 
 import re
 
-from collections import namedtuple
 from odin.utils import getmeta, lazy_property, force_tuple
 
 # Imports for typing support
-from typing import Dict, Union, Optional, Callable, Any, AnyStr, List, Tuple, Hashable, Iterator  # noqa
+from typing import Dict, Union, Optional, Callable, Any, AnyStr, List, Tuple, Hashable, Iterator, NamedTuple  # noqa
 from odin import Resource  # noqa
 
 from . import _compat
@@ -62,8 +61,7 @@ class HttpResponse(object):
         self.headers['Content-Type'] = value
 
 
-# Used to define path nodes
-PathParam = namedtuple('PathParam', 'name type type_args')
+PathParam = NamedTuple('PathParam', [('name', str), ('type', Type), ('type_args', Optional[str])])
 PathParam.__new__.__defaults__ = (None, Type.Integer, None)
 
 
@@ -100,7 +98,7 @@ def _to_swagger(base=None, description=None, resource=None, options=None):
 
 
 # Naming scheme that follows standard python naming rules for variables/methods
-PATH_NODE_RE = re.compile(r'^{([a-zA-Z][a-zA-Z0-9_]*)(?::([a-zA-Z][a-zA-Z0-9_]*))?}$')
+PATH_NODE_RE = re.compile(r'^{([a-zA-Z]\w*)(?::([a-zA-Z]\w*))?(?::([-^$+*:\w\\\[\]\|]+))?}$')
 
 
 class UrlPath(object):
@@ -145,17 +143,15 @@ class UrlPath(object):
                     raise ValueError("Invalid path param: {}".format(node))
 
                 # Parse out name and type
-                name = m.group(1)
-                param_type = m.group(2)
-                if param_type:
-                    try:
-                        path_param = PathParam(name, Type[param_type])
-                    except KeyError:
+                name, param_type, param_arg = m.groups()
+                try:
+                    type_ = Type[param_type]
+                except KeyError:
+                    if param_type is not None:
                         raise ValueError("Unknown param type `{}` in: {}".format(param_type, node))
-                else:
-                    path_param = PathParam(name)
+                    type_ = Type.Integer
 
-                nodes.append(path_param)
+                nodes.append(PathParam(name, type_, param_arg))
             else:
                 nodes.append(node)
 
