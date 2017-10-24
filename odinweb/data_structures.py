@@ -242,9 +242,12 @@ class UrlPath(object):
         """
         Format a node to be consumable by the `UrlPath.parse`.
         """
+        args = [path_node.name]
         if path_node.type:
-            return "{{{}:{}}}".format(path_node.name, path_node.type.name)
-        return "{{{}}}".format(path_node.name)
+            args.append(path_node.type.name)
+        if path_node.type_args:
+            args.append(path_node.type_args)
+        return "{{{}}}".format(':'.join(args))
 
     def format(self, node_formatter=None):
         # type: (Optional[Callable[[PathParam], str]]) -> str
