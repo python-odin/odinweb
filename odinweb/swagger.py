@@ -157,6 +157,12 @@ class SwaggerSpec(ResourceApi):
         """
         return "{{{}}}".format(path_node.name)
 
+    def security_definitions(self):
+        """
+        Chance to generate security definitions.
+        """
+        return None
+
     def parse_operations(self):
         """
         Flatten routes into a path -> method -> route structure
@@ -219,6 +225,7 @@ class SwaggerSpec(ResourceApi):
             'produces': list(CODECS.keys()),
             'paths': paths,
             'definitions': definitions,
+            'securityDefinitions': self.security_definitions(),
         })
 
     def load_static(self, file_name):
