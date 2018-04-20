@@ -31,7 +31,7 @@ from . import resources
 from ._compat import binary_type
 from .constants import HTTPStatus, Type
 from .containers import ResourceApi, CODECS
-from .data_structures import UrlPath, Param, HttpResponse, NoPath
+from .data_structures import UrlPath, Param, HttpResponse, NoPath, DefaultResponse
 from .decorators import Operation
 from .exceptions import HttpError
 from .utils import dict_filter
@@ -178,6 +178,12 @@ class SwaggerSpec(ResourceApi):
             # Add to resource definitions
             if operation.resource:
                 resource_defs[getmeta(operation.resource).resource_name] = resource_definition(operation.resource)
+
+            # Add any resource definitions from responses
+            if operation.responses:
+                for response in operation.responses:
+                    if response.resource is not DefaultResponse:
+                        resource_defs[getmeta(response.resource).resource_name] = resource_definition(response.resource)
 
             # Add path parameters
             path_spec = paths.setdefault(path.format(self.swagger_node_formatter), {})
