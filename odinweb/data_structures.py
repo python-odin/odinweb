@@ -208,7 +208,7 @@ class UrlPath(object):
 
         This is used to apply a name to nodes (used to apply key names) eg:
 
-        >>> a = UrlPath("foo", PathParam('{id}'), "bar")
+        >>> a = UrlPath("foo", PathParam('{key_field}'), "bar")
         >>> b = a.apply_args(id="item_id")
         >>> b.format()
         'foo/{item_id}/bar'
@@ -260,6 +260,7 @@ class UrlPath(object):
         else:
             node_formatter = node_formatter or self.odinweb_node_formatter
             return '/'.join(node_formatter(n) if isinstance(n, PathParam) else n for n in self._nodes)
+
 
 NoPath = UrlPath()
 
