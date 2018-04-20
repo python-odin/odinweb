@@ -110,8 +110,7 @@ class SwaggerSpec(ResourceApi):
         # type: (str, bool, bool, str, Union[str, Tuple[str]]) -> None
         # Register operations
         if enabled:
-            self._operations.append(Operation(SwaggerSpec.get_swagger)
-)
+            self._operations.append(Operation(SwaggerSpec.get_swagger))
             if enable_ui:
                 self._operations.append(Operation(SwaggerSpec.get_ui, UrlPath.parse('ui')))
                 self._operations.append(Operation(SwaggerSpec.get_static, UrlPath.parse('ui/{file_name:String}')))
