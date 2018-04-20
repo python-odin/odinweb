@@ -33,6 +33,22 @@ Methods = Union[Method, Iterable[Method]]
 Path = Union[UrlPath, str, PathParam]
 
 
+class Security(object):
+    """
+    Security definition of an object.
+    """
+    def __init__(self, name, *permissions):
+        # type: (str, str) -> None
+        self.name = name
+        self.permissions = set(permissions)
+
+    def to_swagger(self):
+        """
+        Return swagger definition of this object.
+        """
+        return {self.name: list(self.permissions)}
+
+
 class Operation(object):
     """
     Decorator for defining an API operation. Usually one of the helpers (listing, detail, update, delete) would be
@@ -85,6 +101,9 @@ class Operation(object):
         self.middleware = MiddlewareList(middleware or [])
         self.middleware.append(self)  # Add self as middleware to obtain pre-dispatch support
 
+        # Security object
+        self.security = None
+
         # Documentation
         self.deprecated = False
         self.summary = summary
@@ -95,7 +114,7 @@ class Operation(object):
         self._tags = set(force_tuple(tags))
 
         # Copy values from callback (if defined)
-        for attr in ('deprecated', 'consumes', 'produces', 'responses', 'parameters'):
+        for attr in ('deprecated', 'consumes', 'produces', 'responses', 'parameters', 'security'):
             value = getattr(callback, attr, None)
             if value is not None:
                 setattr(self, attr, value)
@@ -221,6 +240,7 @@ class Operation(object):
             parameters=[param.to_swagger(self.resource) for param in self.parameters] or None,
             produces=list(self.produces) or None,
             responses=dict(resp.to_swagger(self.resource) for resp in self.responses) or None,
+            security=self.security.to_swagger() if self.security else None,
         )
 
     @lazy_property
@@ -244,6 +264,16 @@ class Operation(object):
 
 
 collection = collection_action = operation = Operation
+
+
+def security(name, permissions):
+    """
+    Decorator to add security definition.
+    """
+    def inner(c):
+        c.security = Security(name, permissions)
+        return c
+    return inner
 
 
 def action(callback=None, name=None, path=None, methods=Method.GET, resource=None, tags=None,
