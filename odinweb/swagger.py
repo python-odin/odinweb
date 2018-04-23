@@ -84,7 +84,7 @@ def resource_definition(resource):
         if field.doc_text:
             field_definition['description'] = field.doc_text
 
-        if isinstance(field, VirtualField):
+        if isinstance(field, VirtualField) or field in meta.readonly_fields:
             field_definition['readOnly'] = True
 
         # Use getattr to support calculated fields
