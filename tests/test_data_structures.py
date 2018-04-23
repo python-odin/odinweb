@@ -218,6 +218,7 @@ class TestUrlPath(object):
         (UrlPath('', 'a', PathParam('b', None), 'c'), None, '/a/{b}/c'),
         (UrlPath('', 'a', PathParam('b', Type.String), 'c'), None, '/a/{b:String}/c'),
         (UrlPath('', 'a', PathParam('b', Type.String), 'c'), UrlPath.odinweb_node_formatter, '/a/{b:String}/c'),
+        (UrlPath('', 'a', PathParam('b', Type.Regex, "abc"), 'c'), UrlPath.odinweb_node_formatter, '/a/{b:Regex:abc}/c'),
     ))
     def test_format(self, url_path, formatter, expected):
         actual = url_path.format(formatter)
