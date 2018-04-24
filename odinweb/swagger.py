@@ -31,7 +31,7 @@ from . import resources
 from ._compat import binary_type
 from .constants import HTTPStatus, Type
 from .containers import ResourceApi, CODECS
-from .data_structures import UrlPath, Param, HttpResponse, NoPath
+from .data_structures import UrlPath, Param, HttpResponse, NoPath, DefaultResource
 from .decorators import Operation
 from .exceptions import HttpError
 from .utils import dict_filter
@@ -84,7 +84,7 @@ def resource_definition(resource):
         if field.doc_text:
             field_definition['description'] = field.doc_text
 
-        if isinstance(field, VirtualField):
+        if isinstance(field, VirtualField) or field in meta.readonly_fields:
             field_definition['readOnly'] = True
 
         # Use getattr to support calculated fields
@@ -110,8 +110,7 @@ class SwaggerSpec(ResourceApi):
         # type: (str, bool, bool, str, Union[str, Tuple[str]]) -> None
         # Register operations
         if enabled:
-            self._operations.append(Operation(SwaggerSpec.get_swagger)
-)
+            self._operations.append(Operation(SwaggerSpec.get_swagger))
             if enable_ui:
                 self._operations.append(Operation(SwaggerSpec.get_ui, UrlPath.parse('ui')))
                 self._operations.append(Operation(SwaggerSpec.get_static, UrlPath.parse('ui/{file_name:String}')))
@@ -158,6 +157,12 @@ class SwaggerSpec(ResourceApi):
         """
         return "{{{}}}".format(path_node.name)
 
+    def security_definitions(self):
+        """
+        Chance to generate security definitions.
+        """
+        return None
+
     def parse_operations(self):
         """
         Flatten routes into a path -> method -> route structure
@@ -179,6 +184,12 @@ class SwaggerSpec(ResourceApi):
             # Add to resource definitions
             if operation.resource:
                 resource_defs[getmeta(operation.resource).resource_name] = resource_definition(operation.resource)
+
+            # Add any resource definitions from responses
+            if operation.responses:
+                for response in operation.responses:
+                    if response.resource is not DefaultResource:
+                        resource_defs[getmeta(response.resource).resource_name] = resource_definition(response.resource)
 
             # Add path parameters
             path_spec = paths.setdefault(path.format(self.swagger_node_formatter), {})
@@ -214,6 +225,7 @@ class SwaggerSpec(ResourceApi):
             'produces': list(CODECS.keys()),
             'paths': paths,
             'definitions': definitions,
+            'securityDefinitions': self.security_definitions(),
         })
 
     def load_static(self, file_name):

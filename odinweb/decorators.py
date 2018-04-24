@@ -20,7 +20,7 @@ from .resources import Listing, Error
 from .utils import to_bool, dict_filter
 
 __all__ = (
-    'Operation', 'ListOperation', 'ResourceOperation',
+    'Operation', 'ListOperation', 'ResourceOperation', 'security',
     # Basic routes
     'collection', 'collection_action', 'action', 'operation',
     # Shortcuts
@@ -31,6 +31,22 @@ __all__ = (
 Tags = Union[str, Iterable[str]]
 Methods = Union[Method, Iterable[Method]]
 Path = Union[UrlPath, str, PathParam]
+
+
+class Security(object):
+    """
+    Security definition of an object.
+    """
+    def __init__(self, name, *permissions):
+        # type: (str, str) -> None
+        self.name = name
+        self.permissions = set(permissions)
+
+    def to_swagger(self):
+        """
+        Return swagger definition of this object.
+        """
+        return {self.name: list(self.permissions)}
 
 
 class Operation(object):
@@ -85,6 +101,9 @@ class Operation(object):
         self.middleware = MiddlewareList(middleware or [])
         self.middleware.append(self)  # Add self as middleware to obtain pre-dispatch support
 
+        # Security object
+        self.security = None
+
         # Documentation
         self.deprecated = False
         self.summary = summary
@@ -95,7 +114,7 @@ class Operation(object):
         self._tags = set(force_tuple(tags))
 
         # Copy values from callback (if defined)
-        for attr in ('deprecated', 'consumes', 'produces', 'responses', 'parameters'):
+        for attr in ('deprecated', 'consumes', 'produces', 'responses', 'parameters', 'security'):
             value = getattr(callback, attr, None)
             if value is not None:
                 setattr(self, attr, value)
@@ -173,7 +192,7 @@ class Operation(object):
         """
         Prepared and setup URL Path.
         """
-        return self.url_path.apply_args(id=self.key_field_name)
+        return self.url_path.apply_args(key_field=self.key_field_name)
 
     @property
     def resource(self):
@@ -221,6 +240,7 @@ class Operation(object):
             parameters=[param.to_swagger(self.resource) for param in self.parameters] or None,
             produces=list(self.produces) or None,
             responses=dict(resp.to_swagger(self.resource) for resp in self.responses) or None,
+            security=self.security.to_swagger() if self.security else None,
         )
 
     @lazy_property
@@ -242,17 +262,33 @@ class Operation(object):
                 tags.update(binding_tags)
         return tags
 
+
 collection = collection_action = operation = Operation
 
 
-def action(callback=None, path=None, methods=Method.GET, resource=None, tags=None, summary="Get specified resource.",
-           middleware=None):
-    # type: (Callable, Path, Methods, Resource, Tags, str, List[Any]) -> Operation
+def security(name, permissions):
+    """
+    Decorator to add security definition.
+    """
+    def inner(c):
+        c.security = Security(name, permissions)
+        return c
+    return inner
+
+
+def action(callback=None, name=None, path=None, methods=Method.GET, resource=None, tags=None,
+           summary=None, middleware=None):
+    # type: (Callable, Path, Path, Methods, Resource, Tags, str, List[Any]) -> Operation
     """
     Decorator to apply an action to a resource. An action is applied to a `detail` operation.
     """
+    # Generate action path
+    path = path or '{key_field}'
+    if name:
+        path += name
+
     def inner(c):
-        return Operation(c, path or '{id}', methods, resource, tags, summary, middleware)
+        return Operation(c, path, methods, resource, tags, summary, middleware)
     return inner(callback) if callback else inner
 
 
@@ -397,7 +433,7 @@ def detail(callback=None, path=None, method=Method.GET, resource=None, tags=None
     Decorator to configure an operation that fetches a resource.
     """
     def inner(c):
-        op = Operation(c, path or PathParam('{id}'), method, resource, tags, summary, middleware)
+        op = Operation(c, path or PathParam('{key_field}'), method, resource, tags, summary, middleware)
         op.responses.add(Response(HTTPStatus.OK, "Get a {name}"))
         op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
         return op
@@ -411,7 +447,7 @@ def update(callback=None, path=None, method=Method.PUT, resource=None, tags=None
     Decorator to configure an operation that updates a resource.
     """
     def inner(c):
-        op = ResourceOperation(c, path or PathParam('{id}'), method, resource, tags, summary, middleware)
+        op = ResourceOperation(c, path or PathParam('{key_field}'), method, resource, tags, summary, middleware)
         op.responses.add(Response(HTTPStatus.NO_CONTENT, "{name} has been updated."))
         op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
         op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
@@ -426,7 +462,7 @@ def patch(callback=None, path=None, method=Method.PATCH, resource=None, tags=Non
     Decorator to configure an operation that patches a resource.
     """
     def inner(c):
-        op = ResourceOperation(c, path or PathParam('{id}'), method, resource, tags, summary, middleware,
+        op = ResourceOperation(c, path or PathParam('{key_field}'), method, resource, tags, summary, middleware,
                                full_clean=False, default_to_not_supplied=True)
         op.responses.add(Response(HTTPStatus.OK, "{name} has been patched."))
         op.responses.add(Response(HTTPStatus.BAD_REQUEST, "Validation failed.", Error))
@@ -442,7 +478,7 @@ def delete(callback=None, path=None, method=Method.DELETE, tags=None, summary="D
     Decorator to configure an operation that deletes resource.
     """
     def inner(c):
-        op = Operation(c, path or PathParam('{id}'), method, None, tags, summary, middleware)
+        op = Operation(c, path or PathParam('{key_field}'), method, None, tags, summary, middleware)
         op.responses.add(Response(HTTPStatus.NO_CONTENT, "{name} has been deleted.", None))
         op.responses.add(Response(HTTPStatus.NOT_FOUND, "Not found", Error))
         return op
