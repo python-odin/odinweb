@@ -20,7 +20,7 @@ from .resources import Listing, Error
 from .utils import to_bool, dict_filter
 
 __all__ = (
-    'Operation', 'ListOperation', 'ResourceOperation',
+    'Operation', 'ListOperation', 'ResourceOperation', 'security',
     # Basic routes
     'collection', 'collection_action', 'action', 'operation',
     # Shortcuts
