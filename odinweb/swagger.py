@@ -125,6 +125,17 @@ class SwaggerSpec(ResourceApi):
         self._ui_cache = None
 
     @lazy_property
+    def cenancestor(self):
+        """
+        Last universal ancestor (or the top level of the API structure).
+        """
+        ancestor = parent = self.parent
+        while parent:
+            ancestor = parent
+            parent = getattr(parent, 'parent', None)
+        return ancestor
+
+    @lazy_property
     def base_path(self):
         """
         Calculate the APIs base path
@@ -212,6 +223,7 @@ class SwaggerSpec(ResourceApi):
         """
         api_base = self.parent
         paths, definitions = self.parse_operations()
+        codecs = getattr(self.cenancestor, 'registered_codecs', CODECS)  # type: dict
         return dict_filter({
             'swagger': '2.0',
             'info': {
@@ -221,8 +233,8 @@ class SwaggerSpec(ResourceApi):
             'host': self.host or request.host,
             'schemes': list(self.schemes) or None,
             'basePath': str(self.base_path),
-            'consumes': list(CODECS.keys()),
-            'produces': list(CODECS.keys()),
+            'consumes': list(codecs.keys()),
+            'produces': list(codecs.keys()),
             'paths': paths,
             'definitions': definitions,
             'securityDefinitions': self.security_definitions(),
