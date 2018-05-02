@@ -199,8 +199,13 @@ class SwaggerSpec(ResourceApi):
             # Add any resource definitions from responses
             if operation.responses:
                 for response in operation.responses:
-                    if response.resource is not DefaultResource:
-                        resource_defs[getmeta(response.resource).resource_name] = resource_definition(response.resource)
+                    resource = response.resource
+                    # Ensure we have a resource
+                    if resource and resource is not DefaultResource:
+                        resource_name = getmeta(resource).resource_name
+                        # Don't generate a resource definition if one has already been created.
+                        if resource_name not in resource_defs:
+                            resource_defs[resource_name] = resource_definition(resource)
 
             # Add path parameters
             path_spec = paths.setdefault(path.format(self.swagger_node_formatter), {})
