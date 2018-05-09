@@ -15,7 +15,7 @@ from odin.utils import force_tuple, lazy_property, getmeta
 
 from .constants import HTTPStatus, Method, Type
 from .data_structures import NoPath, UrlPath, PathParam, Param, Response, DefaultResponse, MiddlewareList
-from .helpers import get_resource
+from .helpers import get_resource, create_response
 from .resources import Listing, Error
 from .utils import to_bool, dict_filter
 
@@ -292,9 +292,9 @@ def action(callback=None, name=None, path=None, methods=Method.GET, resource=Non
     return inner(callback) if callback else inner
 
 
-class ListOperation(Operation):
+class WrappedListOperation(Operation):
     """
-    Decorator to indicate a listing endpoint.
+    Decorator to indicate a listing endpoint that uses a listing wrapper.
 
     Usage::
 
@@ -333,7 +333,7 @@ class ListOperation(Operation):
         self.default_limit = kwargs.pop('default_limit', self.default_limit)
         self.max_limit = kwargs.pop('max_limit', self.max_limit)
 
-        super(ListOperation, self).__init__(*args, **kwargs)
+        super(WrappedListOperation, self).__init__(*args, **kwargs)
 
         # Apply documentation
         self.parameters.add(Param.query('offset', Type.Integer, "Offset to start listing from.",
@@ -360,7 +360,7 @@ class ListOperation(Operation):
         bare = to_bool(request.GET.get('bare', False))
 
         # Run base execute
-        result = super(ListOperation, self).execute(request, *args, **path_args)
+        result = super(WrappedListOperation, self).execute(request, *args, **path_args)
         if result is not None:
             if isinstance(result, tuple) and len(result) == 2:
                 result, total_count = result
@@ -368,6 +368,79 @@ class ListOperation(Operation):
                 total_count = None
 
             return result if bare else Listing(result, limit, offset, total_count)
+
+
+class ListOperation(Operation):
+    """
+    Decorator to indicate a listing endpoint that does not use a container.
+
+    Usage::
+
+        class ItemApi(ResourceApi):
+            resource = Item
+
+            @listing(path=PathType.Collection, methods=Method.Get)
+            def list_items(self, request, offset, limit):
+                ...
+                return items
+
+    """
+    default_offset = 0
+    """
+    Default offset if not specified.
+    """
+
+    default_limit = 50
+    """
+    Default limit of not specified.
+    """
+
+    max_limit = None
+    """
+    Maximum limit.
+    """
+
+    def __init__(self, *args, **kwargs):
+        self.default_offset = kwargs.pop('default_offset', self.default_offset)
+        self.default_limit = kwargs.pop('default_limit', self.default_limit)
+        self.max_limit = kwargs.pop('max_limit', self.max_limit)
+
+        super(ListOperation, self).__init__(*args, **kwargs)
+
+        # Apply documentation
+        self.parameters.add(Param.query('offset', Type.Integer, "Offset to start listing from.",
+                                        default=self.default_offset))
+        self.parameters.add(Param.query('limit', Type.Integer, "Limit on the number of listings returned.",
+                                        default=self.default_limit, maximum=self.max_limit))
+
+    def execute(self, request, *args, **path_args):
+        # Get paging args from query string
+        offset = int(request.GET.get('offset', self.default_offset))
+        if offset < 0:
+            offset = 0
+        path_args['offset'] = offset
+
+        max_limit = self.max_limit
+        limit = int(request.GET.get('limit', self.default_limit))
+        if limit < 1:
+            limit = 1
+        elif max_limit and limit > max_limit:
+            limit = max_limit
+        path_args['limit'] = limit
+
+        # Run base execute
+        result = super(ListOperation, self).execute(request, *args, **path_args)
+        if result is not None:
+            headers = {
+                'X-Page-Limit': str(limit),
+                'X-Page-Offset': str(offset),
+            }
+            if isinstance(result, tuple) and len(result) == 2:
+                result, total_count = result
+                if total_count is not None:
+                    headers['X-Total-Count'] = str(total_count)
+
+            return create_response(request, result, headers=headers)
 
 
 class ResourceOperation(Operation):
@@ -399,14 +472,16 @@ class ResourceOperation(Operation):
 # Shortcut methods
 
 def listing(callback=None, path=None, method=Method.GET, resource=None, tags=None, summary="List resources",
-            middleware=None, default_limit=50, max_limit=None):
+            middleware=None, default_limit=50, max_limit=None, use_wrapper=True):
     # type: (Callable, Path, Methods, Resource, Tags, str, List[Any], int, int) -> Operation
     """
     Decorator to configure an operation that returns a list of resources.
     """
+    op_type = WrappedListOperation if use_wrapper else ListOperation
+
     def inner(c):
-        op = ListOperation(c, path or NoPath, method, resource, tags, summary, middleware,
-                           default_limit=default_limit, max_limit=max_limit)
+        op = op_type(c, path or NoPath, method, resource, tags, summary, middleware,
+                     default_limit=default_limit, max_limit=max_limit)
         op.responses.add(Response(HTTPStatus.OK, "Listing of resources", Listing))
         return op
     return inner(callback) if callback else inner
