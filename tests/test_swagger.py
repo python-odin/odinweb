@@ -75,6 +75,22 @@ class TestSwaggerSpec(object):
         assert UrlPath.parse("/api/a/b") == target.base_path
         assert UrlPath.parse("/api/a/b/swagger") == target.swagger_path
 
+    def test_cenancestor(self):
+        target = swagger.SwaggerSpec(title="")
+
+        expected = ApiInterfaceBase(
+            ApiContainer(
+                ApiContainer(
+                    ApiContainer(),
+                    target,
+                    name='b'
+                ),
+                name='a'
+            )
+        )
+
+        assert target.cenancestor is expected
+
     def test_generate_parameters(self):
         actual = swagger.SwaggerSpec.generate_parameters(UrlPath.parse('/api/a/{b}/c/{d:String}'))
         assert actual == [{
@@ -137,11 +153,14 @@ class TestSwaggerSpec(object):
         request = MockRequest()
         target = swagger.SwaggerSpec("Example", schemes='http')
 
-        ApiInterfaceBase(
+        base = ApiInterfaceBase(
             ApiVersion(
                 target,
             ),
         )
+
+        base.registered_codecs.clear()
+        base.registered_codecs['application/yaml'] = None  # Only the keys are used.
 
         actual = target.get_swagger(request)
         expected = {
@@ -153,8 +172,8 @@ class TestSwaggerSpec(object):
             'host': '127.0.0.1',
             'schemes': ['http'],
             'basePath': '/api/v1',
-            'consumes': ['application/json'],
-            'produces': ['application/json'],
+            'consumes': ['application/yaml'],
+            'produces': ['application/yaml'],
             'paths': {},
             'definitions': {
                 'Error': {

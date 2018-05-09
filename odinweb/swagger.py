@@ -125,6 +125,17 @@ class SwaggerSpec(ResourceApi):
         self._ui_cache = None
 
     @lazy_property
+    def cenancestor(self):
+        """
+        Last universal ancestor (or the top level of the API structure).
+        """
+        ancestor = parent = self.parent
+        while parent:
+            ancestor = parent
+            parent = getattr(parent, 'parent', None)
+        return ancestor
+
+    @lazy_property
     def base_path(self):
         """
         Calculate the APIs base path
@@ -188,8 +199,13 @@ class SwaggerSpec(ResourceApi):
             # Add any resource definitions from responses
             if operation.responses:
                 for response in operation.responses:
-                    if response.resource is not DefaultResource:
-                        resource_defs[getmeta(response.resource).resource_name] = resource_definition(response.resource)
+                    resource = response.resource
+                    # Ensure we have a resource
+                    if resource and resource is not DefaultResource:
+                        resource_name = getmeta(resource).resource_name
+                        # Don't generate a resource definition if one has already been created.
+                        if resource_name not in resource_defs:
+                            resource_defs[resource_name] = resource_definition(resource)
 
             # Add path parameters
             path_spec = paths.setdefault(path.format(self.swagger_node_formatter), {})
@@ -212,6 +228,7 @@ class SwaggerSpec(ResourceApi):
         """
         api_base = self.parent
         paths, definitions = self.parse_operations()
+        codecs = getattr(self.cenancestor, 'registered_codecs', CODECS)  # type: dict
         return dict_filter({
             'swagger': '2.0',
             'info': {
@@ -221,8 +238,8 @@ class SwaggerSpec(ResourceApi):
             'host': self.host or request.host,
             'schemes': list(self.schemes) or None,
             'basePath': str(self.base_path),
-            'consumes': list(CODECS.keys()),
-            'produces': list(CODECS.keys()),
+            'consumes': list(codecs.keys()),
+            'produces': list(codecs.keys()),
             'paths': paths,
             'definitions': definitions,
             'securityDefinitions': self.security_definitions(),
