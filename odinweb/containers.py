@@ -388,7 +388,10 @@ class ApiInterfaceBase(ApiContainer):
 
         try:
             for middleware in self.middleware.pre_request:
-                middleware(request, path_args)
+                response = middleware(request, path_args)
+                # Return HttpResponse if one is returned.
+                if isinstance(response, HttpResponse):
+                    return response
 
             response = self._dispatch(operation, request, path_args)
 
