@@ -19,13 +19,6 @@ from .helpers import get_resource, create_response
 from .resources import Listing, Error
 from .utils import to_bool, dict_filter
 
-__all__ = (
-    'Operation', 'ListOperation', 'ResourceOperation', 'security',
-    # Basic routes
-    'collection', 'collection_action', 'action', 'operation',
-    # Shortcuts
-    'listing', 'create', 'detail', 'update', 'patch', 'delete',
-)
 
 # Type definitions
 Tags = Union[str, Iterable[str]]

@@ -7,27 +7,26 @@ Containers that provide structure to an API.
 """
 from __future__ import absolute_import
 
-import logging
-
-# Imports for typing support
 import collections
-from typing import Union, Tuple, Any, Generator, Dict, Type  # noqa
-from odin import Resource  # noqa
+import logging
 
 from odin.codecs import json_codec
 from odin.exceptions import ValidationError
 from odin.utils import getmeta
 
+# Imports for typing support
+from typing import Union, Tuple, Any, Generator, Dict, Type  # noqa
+from odin import Resource  # noqa
+
 from . import _compat
 from . import content_type_resolvers
 from .constants import Method, HTTPStatus
 from .data_structures import UrlPath, NoPath, HttpResponse, MiddlewareList
-from .decorators import Operation
+from .decorators import Operation, Tags
 from .exceptions import ImmediateHttpResponse
 from .helpers import resolve_content_type, create_response
 from .resources import Error
 
-__all__ = ('ResourceApi', 'ApiCollection', 'ApiVersion')
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +156,7 @@ class ApiContainer(object):
         for container in self.containers:
             container.parent = self
 
-        # Having options at the end is  work around until support for
+        # Having options at the end is work around until support for
         # Python < 3.5 is dropped, at that point keyword only args will
         # be used in place of the options kwargs. eg:
         #   (*containers:Union[Operation, ApiContainer], name:str=None, path_prefix:Union[str, UrlPath]=None) -> None
