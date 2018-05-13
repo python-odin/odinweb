@@ -96,7 +96,7 @@ def _to_swagger(base=None, description=None, resource=None, options=None):
 
 
 # Naming scheme that follows standard python naming rules for variables/methods
-PATH_NODE_RE = re.compile(r'^{([a-zA-Z]\w*)(?::([a-zA-Z]\w*))?(?::([-^$+*:\w\\\[\]\|]+))?}$')
+PATH_NODE_RE = re.compile(r'^{([a-zA-Z]\w*)(?::([a-zA-Z]\w*))?(?::([-^$+*:\w\\\[\]|]+))?}$')
 
 
 class UrlPath(object):
@@ -757,7 +757,7 @@ class MultiValueDict(dict):
     itervalues = values
 
     def valuelists(self):
-        # type: (bool) -> Iterator[List[Any]]
+        # type: () -> Iterator[List[Any]]
         """
         Return an iterator of all values associated with a key.  Zipping
         :meth:`keys` and this is the same as calling :meth:`lists`:
