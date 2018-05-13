@@ -1,10 +1,9 @@
 from odinweb import api
+from odinweb.data_structures import HttpResponse
 from odinweb.utils import dict_filter
-from odinweb.exceptions import ImmediateHttpResponse
 
 # Imports for typing support
 from typing import Optional, Any, Sequence, Tuple, Dict, Union  # noqa
-from odinweb.data_structures import HttpResponse  # noqa
 
 
 class AnyOrigin(object):
@@ -107,13 +106,13 @@ class CORS(object):
         })
 
     def pre_request(self, request, _):
-        # type: (Any, Any) -> None
+        # type: (Any, Any) -> Optional[HttpResponse]
         """
         Pre-request hook to check for an Options request and to prepare CORS
         headers.
         """
         if request.method == api.Method.OPTIONS:
-            raise ImmediateHttpResponse(None, headers=self.option_headers(request))
+            return HttpResponse(None, headers=self.option_headers(request))
 
     def post_request(self, request, response):
         # type: (Any, HttpResponse) -> HttpResponse
