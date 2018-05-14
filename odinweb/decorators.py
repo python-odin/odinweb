@@ -70,7 +70,7 @@ class Operation(object):
 
     def __init__(self, callback, path=NoPath, methods=Method.GET, resource=None, tags=None, summary=None,
                  middleware=None):
-        # type: (Callable, Path, Methods, Resource, Tags, str, List[Any]) -> None
+        # type: (Callable, Path, Methods, Type[Resource], Tags, str, List[Any]) -> None
         """
         :param callback: Function we are routing
         :param path: A sub path that can be used as a action.
@@ -238,7 +238,8 @@ class Operation(object):
 
     @lazy_property
     def operation_id(self):
-        return "{}.{}".format(self.base_callback.__module__, self.base_callback.__name__)
+        value = getattr(self.base_callback, 'operation_id', None)
+        return value or "{}.{}".format(self.base_callback.__module__, self.base_callback.__name__)
 
     @property
     def tags(self):
