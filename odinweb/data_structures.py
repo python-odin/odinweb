@@ -165,11 +165,17 @@ class UrlPath(object):
     def __str__(self):
         return self.format()
 
+    def __len__(self):
+        return len(self._nodes)
+
     def __repr__(self):
         return "{}({})".format(
             self.__class__.__name__,
             ', '.join(repr(n) for n in self._nodes)
         )
+
+    def __iter__(self):
+        return iter(self._nodes)
 
     def __add__(self, other):
         # type: (Union[UrlPath, str, PathParam]) -> UrlPath
@@ -198,6 +204,15 @@ class UrlPath(object):
     def __getitem__(self, item):
         # type: (Union[int, slice]) -> UrlPath
         return UrlPath(*force_tuple(self._nodes[item]))
+
+    def startswith(self, other):
+        # type: (UrlPath) -> bool
+        """
+        Return True if this path starts with the other path.
+        """
+        if isinstance(other, UrlPath):
+            return self._nodes[:len(other._nodes)] == other._nodes
+        raise TypeError('startswith first arg must be UrlPath, not {}'.format(type(other)))
 
     def apply_args(self, **kwargs):
         # type: (**str) -> UrlPath
@@ -247,7 +262,7 @@ class UrlPath(object):
             args.append(path_node.type_args)
         return "{{{}}}".format(':'.join(args))
 
-    def format(self, node_formatter=None):
+    def format(self, node_formatter=None, separator='/'):
         # type: (Optional[Callable[[PathParam], str]]) -> str
         """
         Format a URL path.
@@ -257,10 +272,10 @@ class UrlPath(object):
         
         """
         if self._nodes == ('',):
-            return '/'
+            return separator
         else:
             node_formatter = node_formatter or self.odinweb_node_formatter
-            return '/'.join(node_formatter(n) if isinstance(n, PathParam) else n for n in self._nodes)
+            return separator.join(node_formatter(n) if isinstance(n, PathParam) else n for n in self._nodes)
 
 
 NoPath = UrlPath()
