@@ -381,7 +381,7 @@ class ApiInterfaceBase(ApiContainer):
 
     def dispatch(self, operation, request, **path_args):
         """
-        Dispatch incoming request and capture top level exeptions.
+        Dispatch incoming request and capture top level exceptions.
         """
         # Add current operation to the request (for convenience in middleware methods)
         request.current_operation = operation
