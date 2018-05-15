@@ -323,4 +323,10 @@ class TestSecurity(object):
         def target(request):
             pass
 
-        assert {'user': ['write:user', 'read:user']} == target.security.to_swagger()
+        actual = target.security.to_swagger()
+
+        assert isinstance(actual, dict)
+        assert len(actual) == 1
+        assert 'user' in actual
+        assert len(actual['user']) == 2
+        assert {'write:user', 'read:user'} == set(actual['user'])
