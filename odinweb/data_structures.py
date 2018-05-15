@@ -174,9 +174,6 @@ class UrlPath(object):
             ', '.join(repr(n) for n in self._nodes)
         )
 
-    def __iter__(self):
-        return iter(self._nodes)
-
     def __add__(self, other):
         # type: (Union[UrlPath, str, PathParam]) -> UrlPath
         if isinstance(other, UrlPath):
@@ -210,9 +207,12 @@ class UrlPath(object):
         """
         Return True if this path starts with the other path.
         """
-        if isinstance(other, UrlPath):
+        try:
+            other = UrlPath.from_object(other)
+        except ValueError:
+            raise TypeError('startswith first arg must be UrlPath, str, PathParam, not {}'.format(type(other)))
+        else:
             return self._nodes[:len(other._nodes)] == other._nodes
-        raise TypeError('startswith first arg must be UrlPath, not {}'.format(type(other)))
 
     def apply_args(self, **kwargs):
         # type: (**str) -> UrlPath
