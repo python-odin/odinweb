@@ -185,6 +185,25 @@ class TestUrlPath(object):
         actual = str(target[item])
         assert actual == expected
 
+    @pytest.mark.parametrize('other, expected', (
+        ('/', True),
+        ('/a', True),
+        ('/a/', True),
+        ('/a/b/c', True),
+        ('/b', False),
+    ))
+    def test_startswith(self, other, expected):
+        target = UrlPath.parse('/a/b/c')
+        assert expected == target.startswith(other)
+
+    @pytest.mark.parametrize('other', (
+        None, 123, object(), True
+    ))
+    def test_startswith__invalid_other(self, other):
+        target = UrlPath.parse('/a/b/c')
+        with pytest.raises(TypeError):
+            target.startswith(other)
+
     @pytest.mark.parametrize('target, expected', (
         (UrlPath.parse('/a/b/c'), True),
         (UrlPath.parse('a/b/c'), False),

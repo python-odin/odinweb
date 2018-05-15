@@ -307,6 +307,24 @@ class TestApiInterfaceBase(object):
         assert 'test' in actual.headers
         assert calls == ['pre_request', 'pre_dispatch', 'post_dispatch', 'post_request']
 
+    def test_dispatch__with_middleware_pre_request_response(self):
+        """
+        Test scenario where pre-request hook returns a HTTP Response object
+        """
+        class Middleware(object):
+            def pre_request(self, request, path_args):
+                return HttpResponse('eek!', status=HTTPStatus.FORBIDDEN)
+
+        def callback(request, **args):
+            assert False, "Response should have already occurred!"
+
+        target = containers.ApiInterfaceBase(middleware=[Middleware()])
+        operation = Operation(callback)
+        actual = target.dispatch(operation, MockRequest())
+
+        assert actual.body == 'eek!'
+        assert actual.status == 403
+
     def test_dispatch__error_with_debug_enabled(self):
         def callback(request):
             raise ValueError()

@@ -171,3 +171,32 @@ Start the flask app and you can browse to the swagger UI to try out the API::
 
     http://localhost:5000/api/v1/swagger/ui
 
+
+
+CORS
+====
+
+To enable CORS your API Interface (for Flask this is `ApiBlueprint`) needs to
+be wrapped with the CORS wrapper eg::
+
+    from flask import Flask
+    from odinweb.flask import ApiBlueprint
+    from odinweb.cors import CORS, AnyOrigin
+
+    app = flask.Flask(__name__)
+
+    app.register_blueprint(
+        CORS(
+            ApiBlueprint(
+                api.ApiVersion(
+                    UserApi()
+                )
+            ),
+            origins=AnyOrigin
+        )
+    )
+
+For customisation the CORS class can easily be inherited to customise how the
+origin is determined (handy if your application is behind a reverse proxy).
+The CORS wrapper also accepts `max_age`, `allow_credentials`, `expose_headers`
+and `allow_headers` options.
