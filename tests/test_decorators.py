@@ -302,3 +302,25 @@ def test_endpoint_decorators(decorator, klass, method):
 
     assert isinstance(target, klass)
     assert target.methods == (method,)
+
+
+class TestSecurity(object):
+    """
+    Test the security definition
+    """
+    def test_permissions(self):
+        @decorators.security('user', 'write:user', 'read:user')
+        def target(request):
+            pass
+
+        assert hasattr(target, 'security')
+        assert isinstance(target.security, decorators.Security)
+        assert target.security.name == 'user'
+        assert target.security.permissions == {'write:user', 'read:user'}
+
+    def test_to_swagger(self):
+        @decorators.security('user', 'write:user', 'read:user')
+        def target(request):
+            pass
+
+        assert {'user': ['write:user', 'read:user']} == target.security.to_swagger()

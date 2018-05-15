@@ -260,12 +260,12 @@ class Operation(object):
 collection = collection_action = operation = Operation
 
 
-def security(name, permissions):
+def security(name, *permissions):
     """
     Decorator to add security definition.
     """
     def inner(c):
-        c.security = Security(name, permissions)
+        c.security = Security(name, *permissions)
         return c
     return inner
 
