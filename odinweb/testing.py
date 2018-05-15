@@ -20,6 +20,9 @@ except ImportError:
 from .constants import Method
 from .data_structures import MultiValueDict
 
+# Typing
+from .decorators import Operation  # noqa
+
 
 class MockRequest(object):
     """
@@ -35,8 +38,8 @@ class MockRequest(object):
         return cls(scheme, netloc, path, parse_qs(query), headers, method, post, body, request_codec, response_codec)
 
     def __init__(self, scheme='http', host='127.0.0.1', path=None, query=None, headers=None, method=Method.GET,
-                 post=None, body='', request_codec=None, response_codec=None):
-        # type: (str, str, str, Dict[str, str], MultiValueDict, Dict[str, str], Method, str, Any, Any) -> MockRequest
+                 post=None, body='', request_codec=None, response_codec=None, current_operation=None):
+        # type: (str, str, str, Dict[str, str], MultiValueDict, Dict[str, str], Method, str, Any, Any, Operation) -> None
         self.scheme = scheme
         self.host = host
         self.path = path
@@ -47,6 +50,7 @@ class MockRequest(object):
         self.body = body
         self.request_codec = request_codec or json_codec
         self.response_codec = response_codec or json_codec
+        self.current_operation = current_operation
 
 
 def check_request_proxy(request_proxy):
