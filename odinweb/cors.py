@@ -5,7 +5,7 @@ from .data_structures import HttpResponse, UrlPath
 from .utils import dict_filter
 
 # Imports for typing support
-from typing import Optional, Any, Sequence, Tuple, Dict, Union, List  # noqa
+from typing import Optional, Any, Sequence, Tuple, Dict, Union, List, Type  # noqa
 from .containers import ApiInterfaceBase  # noqa
 
 
@@ -13,7 +13,7 @@ class AnyOrigin(object):
     pass
 
 
-Origins = Union[Sequence[str], AnyOrigin]
+Origins = Union[Sequence[str], Type[AnyOrigin]]
 
 
 class CORS(object):
@@ -23,10 +23,13 @@ class CORS(object):
     See `MDN documentation <https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS>`_
     for a technical description of CORS.
 
-    :param origins: List of whitelisted origins or use `AnyOrigin` to return a '*' or allow all.
+    :param origins: List of whitelisted origins or use `AnyOrigin` to return a
+        '*' or allow all.
     :param max_age: Max length of time access control headers can be cached
         in seconds. `None`, disables this header; a value of -1 will disable
-        caching, requiring a preflight *OPTIONS* check for all calls.
+        caching, requiring a pre-flight *OPTIONS* check for all calls.
+    :param allow_credentials: Indicate that credentials can be submitted to
+        this API.
     :param expose_headers: Request headers can be access by a client beyond
         the simple headers, *Cache-Control*, *Content-Language*,
         *Content-Type*, *Expires*, *Last-Modified*, *Pragma*.
@@ -77,7 +80,8 @@ class CORS(object):
         if path.startswith(api_interface.path_prefix):
             path = path[len(api_interface.path_prefix):]
 
-        methods.append(api.Method.OPTIONS)
+        methods = set(methods)
+        methods.add(api.Method.OPTIONS)
 
         @api_interface.operation(path, api.Method.OPTIONS)
         def _cors_options(request, **_):
@@ -119,8 +123,8 @@ class CORS(object):
             'Access-Control-Allow-Origin': self.allow_origin(request),
             'Access-Control-Allow-Methods': ', '.join(m.value for m in methods),
             'Access-Control-Allow-Credentials': {True: 'true', False: 'false'}.get(self.allow_credentials),
-            'Access-Control-Allow-Headers': self.allow_headers,
-            'Access-Control-Expose-Headers': self.expose_headers,
+            'Access-Control-Allow-Headers': ', '.join(self.allow_headers) if self.allow_headers else None,
+            'Access-Control-Expose-Headers': ', '.join(self.expose_headers) if self.expose_headers else None,
             'Access-Control-Max-Age': str(self.max_age) if self.max_age else None,
             'Cache-Control': 'no-cache, no-store'
         })
