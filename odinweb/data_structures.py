@@ -12,8 +12,6 @@ from . import _compat
 from .constants import HTTPStatus, In, Type
 from .utils import dict_filter, sort_by_priority
 
-__all__ = ('DefaultResource', 'HttpResponse', 'UrlPath', 'PathParam', 'NoPath', 'Param', 'Response')
-
 
 class DefaultResource(object):
     """
@@ -98,7 +96,7 @@ def _to_swagger(base=None, description=None, resource=None, options=None):
 
 
 # Naming scheme that follows standard python naming rules for variables/methods
-PATH_NODE_RE = re.compile(r'^{([a-zA-Z]\w*)(?::([a-zA-Z]\w*))?(?::([-^$+*:\w\\\[\]\|]+))?}$')
+PATH_NODE_RE = re.compile(r'^{([a-zA-Z]\w*)(?::([a-zA-Z]\w*))?(?::([-^$+*:\w\\\[\]|]+))?}$')
 
 
 class UrlPath(object):
@@ -167,6 +165,9 @@ class UrlPath(object):
     def __str__(self):
         return self.format()
 
+    def __len__(self):
+        return len(self._nodes)
+
     def __repr__(self):
         return "{}({})".format(
             self.__class__.__name__,
@@ -200,6 +201,18 @@ class UrlPath(object):
     def __getitem__(self, item):
         # type: (Union[int, slice]) -> UrlPath
         return UrlPath(*force_tuple(self._nodes[item]))
+
+    def startswith(self, other):
+        # type: (UrlPath) -> bool
+        """
+        Return True if this path starts with the other path.
+        """
+        try:
+            other = UrlPath.from_object(other)
+        except ValueError:
+            raise TypeError('startswith first arg must be UrlPath, str, PathParam, not {}'.format(type(other)))
+        else:
+            return self._nodes[:len(other._nodes)] == other._nodes
 
     def apply_args(self, **kwargs):
         # type: (**str) -> UrlPath
@@ -249,7 +262,7 @@ class UrlPath(object):
             args.append(path_node.type_args)
         return "{{{}}}".format(':'.join(args))
 
-    def format(self, node_formatter=None):
+    def format(self, node_formatter=None, separator='/'):
         # type: (Optional[Callable[[PathParam], str]]) -> str
         """
         Format a URL path.
@@ -259,10 +272,10 @@ class UrlPath(object):
         
         """
         if self._nodes == ('',):
-            return '/'
+            return separator
         else:
             node_formatter = node_formatter or self.odinweb_node_formatter
-            return '/'.join(node_formatter(n) if isinstance(n, PathParam) else n for n in self._nodes)
+            return separator.join(node_formatter(n) if isinstance(n, PathParam) else n for n in self._nodes)
 
 
 NoPath = UrlPath()
@@ -759,7 +772,7 @@ class MultiValueDict(dict):
     itervalues = values
 
     def valuelists(self):
-        # type: (bool) -> Iterator[List[Any]]
+        # type: () -> Iterator[List[Any]]
         """
         Return an iterator of all values associated with a key.  Zipping
         :meth:`keys` and this is the same as calling :meth:`lists`:

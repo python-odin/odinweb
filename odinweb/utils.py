@@ -54,10 +54,6 @@ def dict_filter_update(base, updates):
     # type: (dict, dict) -> None
     """
     Update dict with None values filtered out.
-    
-    :param base: 
-    :param updates: 
-     
     """
     base.update((k, v) for k, v in updates.items() if v is not None)
 
@@ -65,11 +61,6 @@ def dict_filter_update(base, updates):
 def dict_filter(*args, **kwargs):
     """
     Merge all values into a single dict with all None values removed.
-    
-    :param args: 
-    :param kwargs:
-    :rtype: dict
- 
     """
     result = {}
     for arg in itertools.chain(args, (kwargs,)):

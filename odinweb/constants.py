@@ -3,8 +3,6 @@ import enum
 
 from odin import fields
 
-__all__ = ('HTTPStatus', 'Method', 'PathType', 'In', 'Type')
-
 try:
     from http import HTTPStatus
 except ImportError:
