@@ -76,7 +76,7 @@ def get_resource(request, resource, allow_multiple=False, full_clean=True, defau
 
 
 def create_response(request, body=None, status=None, headers=None):
-    # type: (BaseHttpRequest, status, HTTPStatus, dict) -> HttpResponse
+    # type: (BaseHttpRequest, Any, HTTPStatus, dict) -> HttpResponse
     """
     Generate a HttpResponse.
 
