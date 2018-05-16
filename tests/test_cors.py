@@ -39,10 +39,7 @@ class TestCORS(object):
             'Access-Control-Allow-Origin': 'http://my-domain.org',
             'Access-Control-Allow-Methods': 'GET, HEAD',
         }),
-        (dict(origins=('http://my-alt-domain.org',)), {
-            'Access-Control-Allow-Origin': '',
-            'Access-Control-Allow-Methods': 'GET, HEAD',
-        }),
+        (dict(origins=('http://my-alt-domain.org',)), {}),
         (dict(origins=cors.AnyOrigin, max_age=20), {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, HEAD',
@@ -69,10 +66,11 @@ class TestCORS(object):
         api_interface = ApiInterfaceBase(mock_endpoint)
         cors.CORS(api_interface, **cors_config)
         target = api_interface.middleware[0]
-        http_request = MockRequest(host='my-domain.org', current_operation=mock_endpoint)
+        http_request = MockRequest(headers={'Origin': 'http://my-domain.org'}, current_operation=mock_endpoint)
 
         actual = target.option_headers(http_request, mock_endpoint.methods)
 
+        assert 'GET, HEAD' == actual.pop('Allow')
         assert 'no-cache, no-store' == actual.pop('Cache-Control')
         assert expected == actual
 
@@ -88,7 +86,7 @@ class TestCORS(object):
         cors.CORS(api_interface, origins=origins)
         target = api_interface.middleware[0]
 
-        http_request = MockRequest(host='my-domain.org', method=method, current_operation=mock_endpoint)
+        http_request = MockRequest(headers={'Origin': 'http://my-domain.org'}, method=method, current_operation=mock_endpoint)
         http_response = HttpResponse('')
 
         actual = target.post_request(http_request, http_response)

@@ -1,16 +1,19 @@
 from __future__ import absolute_import
 
+import abc
 import re
 
+from odin.compatibility import deprecated
 from odin.utils import getmeta, lazy_property, force_tuple
-
-# Imports for typing support
-from typing import Dict, Union, Optional, Callable, Any, AnyStr, List, Tuple, Hashable, Iterator, NamedTuple  # noqa
-from odin import Resource  # noqa
 
 from . import _compat
 from .constants import HTTPStatus, In, Type
 from .utils import dict_filter, sort_by_priority
+
+# Imports for typing support
+from typing import Dict, Union, Optional, Callable, Any, AnyStr, List, Tuple, Hashable, Iterator, NamedTuple  # noqa
+from odin import Resource  # noqa
+from .constants import Method
 
 
 class DefaultResource(object):
@@ -22,6 +25,142 @@ class DefaultResource(object):
     """
     def __new__(cls):
         return DefaultResource
+
+
+class BaseHttpRequest(_compat.with_metaclass(abc.ABCMeta, object)):
+    """
+    HttpRequest wrapper base class
+    """
+    current_operation = None
+    request_codec = None
+    response_codec = None
+
+    @property
+    @abc.abstractmethod
+    def environ(self):
+        # type: () -> dict
+        """
+        Environmental values (usually server values)
+        """
+
+    @property
+    @abc.abstractmethod
+    def method(self):
+        # type: () -> Method
+        """
+        Request method
+        """
+
+    @property
+    @abc.abstractmethod
+    def scheme(self):
+        # type: () -> str
+        """
+        Request scheme
+        """
+
+    @property
+    @abc.abstractmethod
+    def host(self):
+        # type: () -> str
+        """
+        Requested host
+        """
+
+    @property
+    @abc.abstractmethod
+    def path(self):
+        # type: () -> str
+        """
+        Request path
+        """
+
+    @property
+    @abc.abstractmethod
+    def query(self):
+        # type: () -> dict
+        """
+        Request path
+        """
+
+    @property
+    @abc.abstractmethod
+    def headers(self):
+        # type: () -> dict
+        """
+        HTTP Headers
+        """
+
+    @property
+    @abc.abstractmethod
+    def cookies(self):
+        """
+        HTTP Cookies
+
+        This is a proxy of the underlying library (eg Flask).
+        """
+
+    @property
+    @abc.abstractmethod
+    def session(self):
+        # type: () -> dict
+        """
+        Current session
+
+        This is a proxy of the underlying library (eg Flask).
+        """
+
+    @property
+    @abc.abstractmethod
+    def body(self):
+        # type: () -> str
+        """
+        HTTP Request body
+        """
+
+    @property
+    @abc.abstractmethod
+    def form(self):
+        # type: () -> dict
+        """
+        Form data (for POST requests using Form encoding)
+        """
+
+    @property
+    def accepts(self):
+        # type: () -> str
+        """
+        Accepts request header
+        """
+        return self.headers.get('ACCEPTS')
+
+    @property
+    def content_type(self):
+        # type: () -> str
+        """
+        Content-Type request header
+        """
+        return self.headers.get('CONTENT_TYPE')
+
+    @property
+    def origin(self):
+        # type: () -> str
+        """
+        Request Origin header
+        """
+        return self.headers.get('ORIGIN')
+
+    @lazy_property
+    @deprecated("Migrate to `query`")
+    def GET(self):
+        # type: () -> dict
+        return self.query
+
+    @lazy_property
+    @deprecated("Migrate to `form`")
+    def POST(self):
+        # type: () -> dict
+        return self.form
 
 
 class HttpResponse(object):
