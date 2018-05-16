@@ -7,10 +7,6 @@ A collection of decorators for identifying the various types of route.
 """
 from __future__ import absolute_import
 
-# Imports for typing support
-from typing import Callable, Union, Tuple, Dict, Any, Generator, List, Set, Iterable  # noqa
-from odin import Resource  # noqa
-
 from odin.utils import force_tuple, lazy_property, getmeta
 
 from .constants import HTTPStatus, Method, Type
@@ -19,6 +15,10 @@ from .helpers import get_resource, create_response
 from .resources import Listing, Error
 from .utils import to_bool, dict_filter
 
+# Imports for typing support
+from typing import Callable, Union, Tuple, Dict, Any, Generator, List, Set, Iterable  # noqa
+from .data_structures import BaseHttpRequest
+from odin import Resource  # noqa
 
 # Type definitions
 Tags = Union[str, Iterable[str]]
@@ -116,7 +116,7 @@ class Operation(object):
         self.responses.add(DefaultResponse('Unhandled error', Error))
 
     def __call__(self, request, path_args):
-        # type: (Any, Dict[Any]) -> Any
+        # type: (BaseHttpRequest, Dict[Any]) -> Any
         """
         Main wrapper around the operation callback function.
         """
@@ -151,7 +151,7 @@ class Operation(object):
         return "Operation({!r}, {!r}, {})".format(self.operation_id, self.path, self.methods)
 
     def execute(self, request, *args, **path_args):
-        # type: (Any, tuple, Dict[Any]) -> Any
+        # type: (BaseHttpRequest, tuple, Dict[Any]) -> Any
         """
         Execute the callback (binding callback if required)
         """
@@ -272,7 +272,7 @@ def security(name, *permissions):
 
 def action(callback=None, name=None, path=None, methods=Method.GET, resource=None, tags=None,
            summary=None, middleware=None):
-    # type: (Callable, Path, Path, Methods, Resource, Tags, str, List[Any]) -> Operation
+    # type: (Callable, Path, Path, Methods, Type[Resource], Tags, str, List[Any]) -> Operation
     """
     Decorator to apply an action to a resource. An action is applied to a `detail` operation.
     """
@@ -337,21 +337,22 @@ class WrappedListOperation(Operation):
         self.parameters.add(Param.query('bare', Type.Boolean, "Return a plain list of objects."))
 
     def execute(self, request, *args, **path_args):
+        # type: (BaseHttpRequest, *Any, **Any) -> Any
         # Get paging args from query string
-        offset = int(request.GET.get('offset', self.default_offset))
+        offset = int(request.query.get('offset', self.default_offset))
         if offset < 0:
             offset = 0
         path_args['offset'] = offset
 
         max_limit = self.max_limit
-        limit = int(request.GET.get('limit', self.default_limit))
+        limit = int(request.query.get('limit', self.default_limit))
         if limit < 1:
             limit = 1
         elif max_limit and limit > max_limit:
             limit = max_limit
         path_args['limit'] = limit
 
-        bare = to_bool(request.GET.get('bare', False))
+        bare = to_bool(request.query.get('bare', False))
 
         # Run base execute
         result = super(WrappedListOperation, self).execute(request, *args, **path_args)
@@ -408,6 +409,7 @@ class ListOperation(Operation):
                                         default=self.default_limit, maximum=self.max_limit))
 
     def execute(self, request, *args, **path_args):
+        # type: (BaseHttpRequest, *Any, **Any) -> Any
         # Get paging args from query string
         offset = int(request.GET.get('offset', self.default_offset))
         if offset < 0:
@@ -453,6 +455,7 @@ class ResourceOperation(Operation):
         self.parameters.add(Param.body('Expected resource supplied with request.'))
 
     def execute(self, request, *args, **path_args):
+        # type: (BaseHttpRequest, *Any, **Any) -> Any
         item = None
         if self.resource:
             item = get_resource(request, self.resource, full_clean=self.full_clean,

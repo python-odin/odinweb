@@ -29,8 +29,8 @@ def test_parse_content_type(value, expected):
 @pytest.mark.parametrize('http_request, expected', (
     (MockRequest(), 'application/json'),
     (MockRequest(headers={'accepts': 'text/html'}), 'text/html'),
-    (MockRequest(headers={'content-type': 'text/plain'}), 'text/plain'),
-    (MockRequest(headers={'accepts': 'text/html', 'content-type': 'text/plain'}), 'text/html'),
+    (MockRequest(headers={'Content-Type': 'text/plain'}), 'text/plain'),
+    (MockRequest(headers={'accepts': 'text/html', 'Content-Type': 'text/plain'}), 'text/html'),
     (MockRequest(headers={'x-auth': '123'}), 'application/json'),
 ))
 def test_resolve_content_type(http_request, expected):
