@@ -127,8 +127,28 @@ class BaseHttpRequest(_compat.with_metaclass(abc.ABCMeta, object)):
         """
 
     @property
+    def accepts(self):
+        # type: () -> str
+        """
+        Accepts request header
+        """
+        return self.headers.get('ACCEPTS')
+
+    @property
     def content_type(self):
-        return self.headers.get('content-type')
+        # type: () -> str
+        """
+        Content-Type request header
+        """
+        return self.headers.get('CONTENT_TYPE')
+
+    @property
+    def origin(self):
+        # type: () -> str
+        """
+        Request Origin header
+        """
+        return self.headers.get('ORIGIN')
 
     @lazy_property
     @deprecated("Migrate to `query`")

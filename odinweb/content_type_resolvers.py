@@ -15,7 +15,7 @@ def accepts_header():
     Resolve content type from the accepts header.
     """
     def resolver(request):
-        return request.headers.get('accepts')
+        return request.accepts
     return resolver
 
 
