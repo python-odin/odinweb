@@ -2,10 +2,11 @@ from __future__ import absolute_import
 
 from . import api
 from .data_structures import HttpResponse, UrlPath
+from .helpers import create_response
 from .utils import dict_filter
 
 # Imports for typing support
-from typing import Optional, Any, Sequence, Tuple, Dict, Union, List, Type  # noqa
+from typing import Optional, Any, Sequence, Dict, Union, List, Type  # noqa
 from .containers import ApiInterfaceBase  # noqa
 from .data_structures import BaseHttpRequest  # noqa
 
@@ -86,22 +87,10 @@ class CORS(object):
 
         @api_interface.operation(path, api.Method.OPTIONS)
         def _cors_options(request, **_):
-            return HttpResponse(None, headers=self.option_headers(request, methods))
+            # type: (BaseHttpRequest, **Any) -> HttpResponse
+            return create_response(request, headers=self.option_headers(request, methods))
 
         _cors_options.operation_id = path.format(separator='.') + '.cors_options'
-
-    def origin_components(self, request):
-        # type: (BaseHttpRequest) -> Tuple[str, str]
-        """
-        Return URL components that make up the origin.
-
-        This allows for customisation in the case or custom headers/proxy
-        configurations.
-
-        :return: Tuple consisting of Scheme, Host/Port
-
-        """
-        return request.scheme, request.host
 
     def allow_origin(self, request):
         # type: (BaseHttpRequest) -> str
@@ -112,7 +101,7 @@ class CORS(object):
         if origins is AnyOrigin:
             return '*'
         else:
-            origin = "{}://{}".format(*self.origin_components(request))
+            origin = request.origin
             return origin if origin in origins else ''
 
     def option_headers(self, request, methods):
@@ -120,15 +109,24 @@ class CORS(object):
         """
         Generate option headers.
         """
-        return dict_filter({
-            'Access-Control-Allow-Origin': self.allow_origin(request),
-            'Access-Control-Allow-Methods': ', '.join(m.value for m in methods),
-            'Access-Control-Allow-Credentials': {True: 'true', False: 'false'}.get(self.allow_credentials),
-            'Access-Control-Allow-Headers': ', '.join(self.allow_headers) if self.allow_headers else None,
-            'Access-Control-Expose-Headers': ', '.join(self.expose_headers) if self.expose_headers else None,
-            'Access-Control-Max-Age': str(self.max_age) if self.max_age else None,
+        methods = ', '.join(m.value for m in methods)
+        headers = {
+            'Allow': methods,
             'Cache-Control': 'no-cache, no-store'
-        })
+        }
+
+        allow_origin = self.allow_origin(request)
+        if allow_origin:
+            headers = dict_filter(headers, {
+                'Access-Control-Allow-Origin': self.allow_origin(request),
+                'Access-Control-Allow-Methods': methods,
+                'Access-Control-Allow-Credentials': {True: 'true', False: 'false'}.get(self.allow_credentials),
+                'Access-Control-Allow-Headers': ', '.join(self.allow_headers) if self.allow_headers else None,
+                'Access-Control-Expose-Headers': ', '.join(self.expose_headers) if self.expose_headers else None,
+                'Access-Control-Max-Age': str(self.max_age) if self.max_age else None,
+            })
+
+        return headers
 
     def post_request(self, request, response):
         # type: (BaseHttpRequest, HttpResponse) -> HttpResponse
