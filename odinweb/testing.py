@@ -18,61 +18,85 @@ except ImportError:
     from urlparse import urlparse, parse_qs
 
 from .constants import Method
-from .data_structures import MultiValueDict
+from .data_structures import MultiValueDict, BaseHttpRequest
 
 # Typing
 from .decorators import Operation  # noqa
 
 
-class MockRequest(object):
+class MockRequest(BaseHttpRequest):
     """
     Mocked Request object.
 
     This can be treated as a template of a request
     """
     @classmethod
-    def from_uri(cls, uri, post=None, headers=None, method=Method.GET, body='',
-                 request_codec=None, response_codec=None):
-        # type: (str, Dict[str, str], Dict[str, str], Method, str, Any, Any) -> MockRequest
+    def from_uri(cls, uri, headers=None, method=Method.GET, body='', form=None, environ=None,
+                 cookies=None, session=None, request_codec=None, response_codec=None):
+        # type: (str, MultiValueDict, Method, str, MultiValueDict, MultiValueDict, MultiValueDict, Any, Any) -> MockRequest
         scheme, netloc, path, _, query, _ = urlparse(uri)
-        return cls(scheme, netloc, path, parse_qs(query), headers, method, post, body, request_codec, response_codec)
+        return cls(scheme, netloc, path, parse_qs(query), headers, method, body, form,
+                   environ, cookies, session, request_codec, response_codec)
 
-    def __init__(self, scheme='http', host='127.0.0.1', path=None, query=None, headers=None, method=Method.GET,
-                 post=None, body='', request_codec=None, response_codec=None, current_operation=None):
-        # type: (str, str, str, Dict[str, str], MultiValueDict, Dict[str, str], Method, str, Any, Any, Operation) -> None
-        self.scheme = scheme
-        self.host = host
-        self.path = path
-        self.GET = MultiValueDict(query or {})
-        self.headers = headers or {}
-        self.method = method
-        self.POST = MultiValueDict(post or {})
-        self.body = body
+    def __init__(self, scheme='http', host='127.0.0.1', path=None, query=None, headers=None,
+                 method=Method.GET, body='', form=None, environ=None, cookies=None, session=None,
+                 request_codec=None, response_codec=None):
+        # type: (str, str, str, MultiValueDict, MultiValueDict, Method, str, MultiValueDict, MultiValueDict, MultiValueDict, MultiValueDict, Any, Any) -> None
+        self._environ = MultiValueDict(environ or {})
+        self._method = method
+        self._scheme = scheme
+        self._host = host
+        self._path = path or ''
+        self._query = MultiValueDict(query or {})
+        self._headers = MultiValueDict(headers or {})
+        self._cookies = MultiValueDict(cookies or {})
+        self._session = MultiValueDict(session or {})
+        self._body = body
+        self._form = MultiValueDict(form or {})
+
         self.request_codec = request_codec or json_codec
         self.response_codec = response_codec or json_codec
-        self.current_operation = current_operation
 
+    @property
+    def environ(self):
+        return self._environ
 
-def check_request_proxy(request_proxy):
-    """
-    A set of standard tests for Request Proxies.
+    @property
+    def method(self):
+        return self._method
 
-    This is for use by integrations with python web frameworks to verify the request proxy
-    behaves as expected.
+    @property
+    def scheme(self):
+        return self._scheme
 
-    """
-    for attr, expected_type in (
-        ('scheme', str),
-        ('host', str),
-        ('path', None),
-        ('GET', MultiValueDict),
-        ('headers', (dict, MutableMapping)),
-        ('method', Method),
-        ('POST', MultiValueDict),
-        ('body', None),
-    ):
-        assert hasattr(request_proxy, attr), "{} instance missing attribute {}.".format(request_proxy.__class__, attr)
-        obj = getattr(request_proxy, attr)
-        if expected_type:
-            assert isinstance(obj, expected_type), "Incorrect type of {}.{}; expected {} got {}.".format(
-                request_proxy.__class__, attr, expected_type, type(obj))
+    @property
+    def host(self):
+        return self._host
+
+    @property
+    def path(self):
+        return self._path
+
+    @property
+    def query(self):
+        return self._query
+
+    @property
+    def headers(self):
+        return self._headers
+
+    @property
+    def cookies(self):
+        return self._cookies
+
+    @property
+    def session(self):
+        return self._session
+
+    @property
+    def body(self):
+        return self._body
+
+    @property
+    def form(self):
+        return self._form

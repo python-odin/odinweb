@@ -24,7 +24,7 @@ def content_type_header():
     Resolve content type from the content-type header.
     """
     def resolver(request):
-        return request.headers.get('content-type')
+        return request.content_type
     return resolver
 
 

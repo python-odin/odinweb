@@ -7,6 +7,7 @@ from .utils import dict_filter
 # Imports for typing support
 from typing import Optional, Any, Sequence, Tuple, Dict, Union, List, Type  # noqa
 from .containers import ApiInterfaceBase  # noqa
+from .data_structures import BaseHttpRequest  # noqa
 
 
 class AnyOrigin(object):
@@ -90,7 +91,7 @@ class CORS(object):
         _cors_options.operation_id = path.format(separator='.') + '.cors_options'
 
     def origin_components(self, request):
-        # type: (Any) -> Tuple[str, str]
+        # type: (BaseHttpRequest) -> Tuple[str, str]
         """
         Return URL components that make up the origin.
 
@@ -103,7 +104,7 @@ class CORS(object):
         return request.scheme, request.host
 
     def allow_origin(self, request):
-        # type: (Any) -> str
+        # type: (BaseHttpRequest) -> str
         """
         Generate allow origin header
         """
@@ -115,7 +116,7 @@ class CORS(object):
             return origin if origin in origins else ''
 
     def option_headers(self, request, methods):
-        # type: (Any, Sequence[api.Method]) -> Dict[str, str]
+        # type: (BaseHttpRequest, Sequence[api.Method]) -> Dict[str, str]
         """
         Generate option headers.
         """
@@ -130,7 +131,7 @@ class CORS(object):
         })
 
     def post_request(self, request, response):
-        # type: (Any, HttpResponse) -> HttpResponse
+        # type: (BaseHttpRequest, HttpResponse) -> HttpResponse
         """
         Post-request hook to allow CORS headers to responses.
         """

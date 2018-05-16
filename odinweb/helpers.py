@@ -1,11 +1,12 @@
-# Type imports
-from typing import Iterable, Callable, Any, Optional  # noqa
-
 from odin.exceptions import CodecDecodeError, ResourceException
 
 from .constants import HTTPStatus
 from .data_structures import HttpResponse
 from .exceptions import HttpError
+
+# Type imports
+from typing import Iterable, Callable, Any, Optional  # noqa
+from .data_structures import BaseHttpRequest  # noqa
 
 
 def parse_content_type(value):
@@ -75,6 +76,7 @@ def get_resource(request, resource, allow_multiple=False, full_clean=True, defau
 
 
 def create_response(request, body=None, status=None, headers=None):
+    # type: (BaseHttpRequest, status, HTTPStatus, dict) -> HttpResponse
     """
     Generate a HttpResponse.
 

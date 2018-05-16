@@ -15,8 +15,9 @@ from odin.exceptions import ValidationError
 from odin.utils import getmeta
 
 # Imports for typing support
-from typing import Union, Tuple, Any, Generator, Dict, Type  # noqa
+from typing import Union, Tuple, Any, Generator, Dict, Type, Optional  # noqa
 from odin import Resource  # noqa
+from .data_structures import BaseHttpRequest  # noqa
 
 from . import _compat
 from . import content_type_resolvers
@@ -271,6 +272,7 @@ class ApiInterfaceBase(ApiContainer):
             raise ValueError("Path prefix must be an absolute path (eg start with a '/')")
 
     def handle_500(self, request, exception):
+        # type: (BaseHttpRequest, BaseException)
         """
         Handle an *un-handled* exception.
         """
@@ -293,6 +295,7 @@ class ApiInterfaceBase(ApiContainer):
                                  "An unhandled error has been caught.")
 
     def dispatch_operation(self, operation, request, path_args):
+        # type: (Operation, BaseHttpRequest, Dict[str, Any]) -> Tuple[Any, Optional[HTTPStatus], Optional[dict]]
         """
         Dispatch and handle exceptions from operation.
         """
