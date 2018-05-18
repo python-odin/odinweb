@@ -106,8 +106,8 @@ class CORS(object):
         methods.add(api.Method.OPTIONS)
 
         # Apply operation decorator
-        operation_decorator = api_interface.operation(path, api.Method.OPTIONS,
-                                                      middleware=[_MethodsMiddleware(methods)])
+        operation_decorator = api_interface.operation(
+            path, api.Method.OPTIONS, middleware=[_MethodsMiddleware(methods)])
         operation = operation_decorator(self.cors_options)
         operation.operation_id = path.format(separator='.') + '.cors_options'
 
@@ -137,7 +137,7 @@ class CORS(object):
         allow_origin = self.allow_origin(request)
         if allow_origin:
             headers = dict_filter(headers, {
-                'Access-Control-Allow-Origin': self.allow_origin(request),
+                'Access-Control-Allow-Origin': allow_origin,
                 'Access-Control-Allow-Methods': methods,
                 'Access-Control-Allow-Credentials': {True: 'true', False: 'false'}.get(self.allow_credentials),
                 'Access-Control-Allow-Headers': ', '.join(self.allow_headers) if self.allow_headers else None,
@@ -151,11 +151,17 @@ class CORS(object):
         """
         Generate standard request headers
         """
-        return dict_filter({
-            'Access-Control-Allow-Origin': self.allow_origin(request),
-            'Access-Control-Allow-Credentials': {True: 'true', False: 'false'}.get(self.allow_credentials),
-            'Access-Control-Expose-Headers': ', '.join(self.expose_headers) if self.expose_headers else None,
-        })
+        headers = {}
+
+        allow_origin = self.allow_origin(request)
+        if allow_origin:
+            headers = dict_filter({
+                'Access-Control-Allow-Origin': allow_origin,
+                'Access-Control-Allow-Credentials': {True: 'true', False: 'false'}.get(self.allow_credentials),
+                'Access-Control-Expose-Headers': ', '.join(self.expose_headers) if self.expose_headers else None,
+            })
+
+        return headers
 
     def post_request(self, request, response):
         # type: (BaseHttpRequest, HttpResponse) -> HttpResponse
