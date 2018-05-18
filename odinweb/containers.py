@@ -173,18 +173,20 @@ class ApiContainer(object):
         if options:
             raise TypeError("Got an unexpected keyword argument(s) {}", options.keys())
 
-    def operation(self, path, methods=Method.GET, resource=None, tags=None):
-        # type: (UrlPath, Union(Method, Tuple[Method]), Type[Resource], Tags) -> Operation
+    def operation(self, path, methods=Method.GET, resource=None, tags=None, summary=None, middleware=None):
+        # type: (UrlPath, Union(Method, Tuple[Method]), Type[Resource], Tags, str, list) -> Operation
         """
         :param path: A sub path that can be used as a action.
         :param methods: HTTP method(s) this function responses to.
         :param resource: Specify the resource that this function encodes/decodes,
             default is the one specified on the ResourceAPI instance.
         :param tags: Tags to be applied to operation
+        :param summary: Summary of the what method does (for documentation)
+        :param middleware: List of additional middleware
 
         """
         def inner(callback):
-            operation = Operation(callback, path, methods, resource, tags)
+            operation = Operation(callback, path, methods, resource, tags, summary, middleware)
             self.containers.append(operation)
             return operation
         return inner

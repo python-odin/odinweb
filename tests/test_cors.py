@@ -62,16 +62,67 @@ class TestCORS(object):
             'Access-Control-Expose-Headers': 'X-Custom-A, X-Custom-C',
         }),
     ))
-    def test_option_headers(self, cors_config, expected):
+    def test_pre_flight_headers(self, cors_config, expected):
         api_interface = ApiInterfaceBase(mock_endpoint)
         cors.CORS(api_interface, **cors_config)
         target = api_interface.middleware[0]
         http_request = MockRequest(headers={'Origin': 'http://my-domain.org'}, current_operation=mock_endpoint)
 
-        actual = target.option_headers(http_request, mock_endpoint.methods)
+        actual = target.pre_flight_headers(http_request, mock_endpoint.methods)
 
         assert 'GET, HEAD' == actual.pop('Allow')
         assert 'no-cache, no-store' == actual.pop('Cache-Control')
+        assert expected == actual
+
+    @pytest.mark.parametrize('origins, expected', (
+        (cors.AnyOrigin, '*'),
+        (('http://my-domain.org',), 'http://my-domain.org'),
+        (('http://my-alt-domain.org',), None),
+    ))
+    def test_cors_options(self, origins, expected):
+        api_interface = ApiInterfaceBase(mock_endpoint)
+        cors.CORS(api_interface, origins=origins)
+        target = api_interface.middleware[0]
+
+        http_request = MockRequest(headers={'Origin': 'http://my-domain.org'}, method=Method.OPTIONS)
+        cors._MethodsMiddleware((Method.GET, Method.HEAD)).pre_dispatch(http_request, None)
+
+        actual = target.cors_options(http_request)
+
+        assert isinstance(actual, HttpResponse)
+        assert 'GET, HEAD' == actual.headers.pop('Allow')
+        assert 'no-cache, no-store' == actual.headers.pop('Cache-Control')
+        assert expected == actual.headers.get('Access-Control-Allow-Origin')
+
+    @pytest.mark.parametrize('cors_config, expected', (
+        (dict(origins=cors.AnyOrigin), {
+            'Access-Control-Allow-Origin': '*',
+        }),
+        (dict(origins=('http://my-domain.org', 'http://my-alt-domain.org')), {
+            'Access-Control-Allow-Origin': 'http://my-domain.org',
+        }),
+        (dict(origins=('http://my-alt-domain.org',)), {}),
+        (dict(origins=cors.AnyOrigin, allow_credentials=True), {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Credentials': 'true',
+        }),
+        (dict(origins=cors.AnyOrigin, allow_credentials=False), {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Credentials': 'false',
+        }),
+        (dict(origins=cors.AnyOrigin, expose_headers=('X-Custom-A', 'X-Custom-C')), {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Expose-Headers': 'X-Custom-A, X-Custom-C',
+        }),
+    ))
+    def test_request_headers(self, cors_config, expected):
+        api_interface = ApiInterfaceBase(mock_endpoint)
+        cors.CORS(api_interface, **cors_config)
+        target = api_interface.middleware[0]
+        http_request = MockRequest(headers={'Origin': 'http://my-domain.org'}, current_operation=mock_endpoint)
+
+        actual = target.request_headers(http_request)
+
         assert expected == actual
 
     @pytest.mark.parametrize('origins, method, expected', (
@@ -79,7 +130,7 @@ class TestCORS(object):
         (cors.AnyOrigin, Method.OPTIONS, None),
         (('http://my-domain.org',), Method.GET, 'http://my-domain.org'),
         (('http://my-domain.org',), Method.OPTIONS, None),
-        (('http://my-alt-domain.org',), Method.GET, ''),
+        (('http://my-alt-domain.org',), Method.GET, None),
     ))
     def test_post_request(self, origins, method, expected):
         api_interface = ApiInterfaceBase(mock_endpoint)

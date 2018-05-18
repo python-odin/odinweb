@@ -78,6 +78,9 @@ class Operation(object):
         :param resource: Specify the resource that this function encodes/decodes,
             default is the one specified on the ResourceAPI instance.
         :param tags: Tags to be applied to operation
+        :param summary: Summary of the what method does (for documentation)
+        :param middleware: List of additional middleware
+
         """
         self.base_callback = self.callback = callback
         self.url_path = UrlPath.from_object(path)
