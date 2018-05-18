@@ -18,6 +18,14 @@ class AnyOrigin(object):
 Origins = Union[Sequence[str], Type[AnyOrigin]]
 
 
+class _MethodsMiddleware:
+    def __init__(self, methods):
+        self.methods = methods
+
+    def pre_dispatch(self, request, _):
+        request.supported_methods = self.methods
+
+
 class CORS(object):
     """
     CORS (Cross-Origin Request Sharing) support for OdinWeb APIs.
@@ -73,6 +81,18 @@ class CORS(object):
             if api.Method.OPTIONS not in operations:
                 self._options_operation(api_interface, path, operations.keys())
 
+    def cors_options(self, request, **_):
+        """
+        CORS options response method.
+
+        Broken out if this needs to be customised.
+
+        """
+        return create_response(
+            request,
+            headers=self.pre_flight_headers(request, request.supported_methods)
+        )
+
     def _options_operation(self, api_interface, path, methods):
         # type: (ApiInterfaceBase, UrlPath, List[api.Method]) -> None
         """
@@ -85,12 +105,11 @@ class CORS(object):
         methods = set(methods)
         methods.add(api.Method.OPTIONS)
 
-        @api_interface.operation(path, api.Method.OPTIONS)
-        def _cors_options(request, **_):
-            # type: (BaseHttpRequest, **Any) -> HttpResponse
-            return create_response(request, headers=self.option_headers(request, methods))
-
-        _cors_options.operation_id = path.format(separator='.') + '.cors_options'
+        # Apply operation decorator
+        operation_decorator = api_interface.operation(path, api.Method.OPTIONS,
+                                                      middleware=[_MethodsMiddleware(methods)])
+        operation = operation_decorator(self.cors_options)
+        operation.operation_id = path.format(separator='.') + '.cors_options'
 
     def allow_origin(self, request):
         # type: (BaseHttpRequest) -> str
@@ -104,10 +123,10 @@ class CORS(object):
             origin = request.origin
             return origin if origin in origins else ''
 
-    def option_headers(self, request, methods):
+    def pre_flight_headers(self, request, methods):
         # type: (BaseHttpRequest, Sequence[api.Method]) -> Dict[str, str]
         """
-        Generate option headers.
+        Generate pre-flight headers.
         """
         methods = ', '.join(m.value for m in methods)
         headers = {
@@ -128,11 +147,21 @@ class CORS(object):
 
         return headers
 
+    def request_headers(self, request):
+        """
+        Generate standard request headers
+        """
+        return dict_filter({
+            'Access-Control-Allow-Origin': self.allow_origin(request),
+            'Access-Control-Allow-Credentials': {True: 'true', False: 'false'}.get(self.allow_credentials),
+            'Access-Control-Expose-Headers': ', '.join(self.expose_headers) if self.expose_headers else None,
+        })
+
     def post_request(self, request, response):
         # type: (BaseHttpRequest, HttpResponse) -> HttpResponse
         """
         Post-request hook to allow CORS headers to responses.
         """
         if request.method != api.Method.OPTIONS:
-            response.headers['Access-Control-Allow-Origin'] = self.allow_origin(request)
+            response.headers.update(self.request_headers(request))
         return response
