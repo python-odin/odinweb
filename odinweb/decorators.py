@@ -7,6 +7,8 @@ A collection of decorators for identifying the various types of route.
 """
 from __future__ import absolute_import
 
+import odin
+
 from odin.utils import force_tuple, lazy_property, getmeta
 
 from .constants import HTTPStatus, Method, Type
@@ -16,9 +18,8 @@ from .resources import Listing, Error
 from .utils import to_bool, dict_filter
 
 # Imports for typing support
-from typing import Callable, Union, Tuple, Dict, Any, Generator, List, Set, Iterable  # noqa
+from typing import Callable, Union, Tuple, Dict, Any, Generator, List, Set, Iterable  # noqa: F401
 from .data_structures import BaseHttpRequest
-from odin import Resource  # noqa
 
 # Type definitions
 Tags = Union[str, Iterable[str]]
@@ -70,7 +71,7 @@ class Operation(object):
 
     def __init__(self, callback, path=NoPath, methods=Method.GET, resource=None, tags=None, summary=None,
                  middleware=None):
-        # type: (Callable, Path, Methods, Type[Resource], Tags, str, List[Any]) -> None
+        # type: (Callable, Path, Methods, Type[odin.Resource], Tags, str, List[Any]) -> None
         """
         :param callback: Function we are routing
         :param path: A sub path that can be used as a action.
@@ -275,7 +276,7 @@ def security(name, *permissions):
 
 def action(callback=None, name=None, path=None, methods=Method.GET, resource=None, tags=None,
            summary=None, middleware=None):
-    # type: (Callable, Path, Path, Methods, Type[Resource], Tags, str, List[Any]) -> Operation
+    # type: (Callable, Path, Path, Methods, Type[odin.Resource], Tags, str, List[Any]) -> Operation
     """
     Decorator to apply an action to a resource. An action is applied to a `detail` operation.
     """
@@ -332,6 +333,12 @@ class WrappedListOperation(Operation):
 
         super(WrappedListOperation, self).__init__(*args, **kwargs)
 
+        # TODO: This is a workaround until params can validate and type convert themselves.
+        self.offset_param = odin.IntegerField(name='offset', min_value=0, default=self.default_offset)
+        self.limit_param = odin.IntegerField(name='limit', min_value=1, max_value=self.max_limit,
+                                             default=self.default_limit)
+        self.bare_param = odin.BooleanField(name='bare', default=False)
+
         # Apply documentation
         self.parameters.add(Param.query('offset', Type.Integer, "Offset to start listing from.",
                                         default=self.default_offset))
@@ -342,20 +349,17 @@ class WrappedListOperation(Operation):
     def execute(self, request, *args, **path_args):
         # type: (BaseHttpRequest, *Any, **Any) -> Any
         # Get paging args from query string
-        offset = int(request.query.get('offset', self.default_offset))
-        if offset < 0:
-            offset = 0
+        param = self.offset_param
+        offset = param.clean(request.GET.get(param.name, param.default))
         path_args['offset'] = offset
 
-        max_limit = self.max_limit
-        limit = int(request.query.get('limit', self.default_limit))
-        if limit < 1:
-            limit = 1
-        elif max_limit and limit > max_limit:
-            limit = max_limit
+        param = self.limit_param
+        limit = param.clean(request.GET.get(param.name, param.default))
         path_args['limit'] = limit
 
-        bare = to_bool(request.query.get('bare', False))
+        param = self.bare_param
+        bare = param.clean(request.GET.get(param.name, param.default))
+        path_args['bare'] = bare
 
         # Run base execute
         result = super(WrappedListOperation, self).execute(request, *args, **path_args)
@@ -405,6 +409,11 @@ class ListOperation(Operation):
 
         super(ListOperation, self).__init__(*args, **kwargs)
 
+        # TODO: This is a workaround until params can validate and type convert themselves.
+        self.offset_param = odin.IntegerField(name='offset', min_value=0, default=self.default_offset)
+        self.limit_param = odin.IntegerField(name='limit', min_value=1, max_value=self.max_limit,
+                                             default=self.default_limit)
+
         # Apply documentation
         self.parameters.add(Param.query('offset', Type.Integer, "Offset to start listing from.",
                                         default=self.default_offset))
@@ -414,17 +423,12 @@ class ListOperation(Operation):
     def execute(self, request, *args, **path_args):
         # type: (BaseHttpRequest, *Any, **Any) -> Any
         # Get paging args from query string
-        offset = int(request.GET.get('offset', self.default_offset))
-        if offset < 0:
-            offset = 0
+        param = self.offset_param
+        offset = param.clean(request.GET.get(param.name, param.default))
         path_args['offset'] = offset
 
-        max_limit = self.max_limit
-        limit = int(request.GET.get('limit', self.default_limit))
-        if limit < 1:
-            limit = 1
-        elif max_limit and limit > max_limit:
-            limit = max_limit
+        param = self.limit_param
+        limit = param.clean(request.GET.get(param.name, param.default))
         path_args['limit'] = limit
 
         # Run base execute
@@ -473,7 +477,7 @@ class ResourceOperation(Operation):
 
 def listing(callback=None, path=None, method=Method.GET, resource=None, tags=None, summary="List resources",
             middleware=None, default_limit=50, max_limit=None, use_wrapper=True):
-    # type: (Callable, Path, Methods, Resource, Tags, str, List[Any], int, int) -> Operation
+    # type: (Callable, Path, Methods, Type[odin.Resource], Tags, str, List[Any], int, int) -> Operation
     """
     Decorator to configure an operation that returns a list of resources.
     """
@@ -489,7 +493,7 @@ def listing(callback=None, path=None, method=Method.GET, resource=None, tags=Non
 
 def create(callback=None, path=None, method=Method.POST, resource=None, tags=None, summary="Create a new resource",
            middleware=None):
-    # type: (Callable, Path, Methods, Resource, Tags, str, List[Any]) -> Operation
+    # type: (Callable, Path, Methods, Type[odin.Resource], Tags, str, List[Any]) -> Operation
     """
     Decorator to configure an operation that creates a resource.
     """
@@ -503,7 +507,7 @@ def create(callback=None, path=None, method=Method.POST, resource=None, tags=Non
 
 def detail(callback=None, path=None, method=Method.GET, resource=None, tags=None, summary="Get specified resource.",
            middleware=None):
-    # type: (Callable, Path, Methods, Resource, Tags, str, List[Any]) -> Operation
+    # type: (Callable, Path, Methods, Type[odin.Resource], Tags, str, List[Any]) -> Operation
     """
     Decorator to configure an operation that fetches a resource.
     """
@@ -517,7 +521,7 @@ def detail(callback=None, path=None, method=Method.GET, resource=None, tags=None
 
 def update(callback=None, path=None, method=Method.PUT, resource=None, tags=None, summary="Update specified resource.",
            middleware=None):
-    # type: (Callable, Path, Methods, Resource, Tags, str, List[Any]) -> Operation
+    # type: (Callable, Path, Methods, Type[odin.Resource], Tags, str, List[Any]) -> Operation
     """
     Decorator to configure an operation that updates a resource.
     """
@@ -532,7 +536,7 @@ def update(callback=None, path=None, method=Method.PUT, resource=None, tags=None
 
 def patch(callback=None, path=None, method=Method.PATCH, resource=None, tags=None, summary="Patch specified resource.",
           middleware=None):
-    # type: (Callable, Path, Methods, Resource, Tags, str, List[Any]) -> Operation
+    # type: (Callable, Path, Methods, Type[odin.Resource], Tags, str, List[Any]) -> Operation
     """
     Decorator to configure an operation that patches a resource.
     """

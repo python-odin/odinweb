@@ -14,11 +14,6 @@ from odin.codecs import json_codec
 from odin.exceptions import ValidationError
 from odin.utils import getmeta
 
-# Imports for typing support
-from typing import Union, Tuple, Any, Generator, Dict, Type, Optional  # noqa
-from odin import Resource  # noqa
-from .data_structures import BaseHttpRequest  # noqa
-
 from . import _compat
 from . import content_type_resolvers
 from .constants import Method, HTTPStatus
@@ -27,6 +22,11 @@ from .decorators import Operation, Tags
 from .exceptions import ImmediateHttpResponse
 from .helpers import resolve_content_type, create_response
 from .resources import Error
+
+# Imports for typing support
+from typing import Union, Tuple, Any, Generator, Dict, Type, Optional  # noqa: F401
+from odin import Resource  # noqa: F401
+from .data_structures import BaseHttpRequest  # noqa: F401
 
 
 logger = logging.getLogger(__name__)
@@ -274,7 +274,7 @@ class ApiInterfaceBase(ApiContainer):
             raise ValueError("Path prefix must be an absolute path (eg start with a '/')")
 
     def handle_500(self, request, exception):
-        # type: (BaseHttpRequest, BaseException)
+        # type: (BaseHttpRequest, BaseException) -> Any
         """
         Handle an *un-handled* exception.
         """

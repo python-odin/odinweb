@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import pytest
 
 from collections import defaultdict
+from odin.exceptions import ValidationError
 
 from odinweb import decorators
 from odinweb.constants import *
@@ -134,21 +135,15 @@ class TestWrappedListOperation(object):
 
     @pytest.mark.parametrize('options, query, offset, limit, bare', (
         ({}, {}, 0, 50, False),
-        ({}, {'offset': 10}, 10, 50, False),
-        ({}, {'limit': 20}, 0, 20, False),
+        ({}, {'offset': '10'}, 10, 50, False),
+        ({}, {'limit': '20'}, 0, 20, False),
         ({}, {'bare': 'F'}, 0, 50, False),
         ({}, {'bare': 'T'}, 0, 50, True),
         ({}, {'bare': 'yes'}, 0, 50, True),
-        ({}, {'offset': 10, 'limit': 20, 'bare': '1'}, 10, 20, True),
+        ({}, {'offset': '10', 'limit': 20, 'bare': '1'}, 10, 20, True),
         # Max limit
         ({'max_limit': 100}, {}, 0, 50, False),
         ({'max_limit': 100}, {'offset': 10, 'limit': 100}, 10, 100, False),
-        ({'max_limit': 100}, {'offset': 10, 'limit': 102}, 10, 100, False),
-        # Silly values?
-        ({}, {'offset': -1}, 0, 50, False),
-        ({}, {'limit': -1}, 0, 1, False),
-        ({}, {'limit': 0}, 0, 1, False),
-        ({}, {'offset': -1, 'limit': -1}, 0, 1, False),
     ))
     def test_options_handled(self, options, query, offset, limit, bare):
         mock_request = MockRequest(query=query)
@@ -172,11 +167,36 @@ class TestWrappedListOperation(object):
             assert result.limit == limit
             assert result.total_count is None
 
+    @pytest.mark.parametrize('options, query', (
+            ({}, {'offset': '-1'}),
+            ({}, {'offset': ''}),
+            ({}, {'offset': 'Xyz'}),
+            ({}, {'offset': '?$#'}),
+            ({}, {'limit': '-1'}),
+            ({}, {'limit': '0'}),
+            ({}, {'limit': ''}),
+            ({}, {'limit': 'Xyz'}),
+            ({}, {'limit': '?$#'}),
+            ({'max_limit': 20}, {'limit': '21'}),
+            ({}, {'bare': 'eek'}),
+            ({}, {'bare': ''}),
+            ({}, {'bare': '32'}),
+    ))
+    def test_options_handled__invalid(self, options, query):
+        mock_request = MockRequest(query=query)
+
+        @decorators.WrappedListOperation(**options)
+        def my_func(*_):
+            pass
+
+        with pytest.raises(ValidationError):
+            my_func(mock_request, {})
+
     def test_returning_total_count(self):
         mock_request = MockRequest()
 
         @decorators.WrappedListOperation
-        def my_func(request, foo, offset, limit):
+        def my_func(request, foo, offset, limit, bare):
             assert foo == 'bar'
             assert offset == 0
             assert limit == 50
@@ -214,12 +234,6 @@ class TestListOperation(object):
         # Max limit
         ({'max_limit': 100}, {}, 0, 50),
         ({'max_limit': 100}, {'offset': 10, 'limit': 100}, 10, 100),
-        ({'max_limit': 100}, {'offset': 10, 'limit': 102}, 10, 100),
-        # Silly values?
-        ({}, {'offset': -1}, 0, 50),
-        ({}, {'limit': -1}, 0, 1),
-        ({}, {'limit': 0}, 0, 1),
-        ({}, {'offset': -1, 'limit': -1}, 0, 1),
     ))
     def test_options_handled(self, options, query, offset, limit):
         mock_request = MockRequest(query=query)
@@ -239,6 +253,28 @@ class TestListOperation(object):
         assert result['X-Page-Offset'] == str(offset)
         assert result['X-Page-Limit'] == str(limit)
         assert 'X-Total-Count' not in result.headers
+
+    @pytest.mark.parametrize('options, query', (
+            ({}, {'offset': '-1'}),
+            ({}, {'offset': ''}),
+            ({}, {'offset': 'Xyz'}),
+            ({}, {'offset': '?$#'}),
+            ({}, {'limit': '-1'}),
+            ({}, {'limit': '0'}),
+            ({}, {'limit': ''}),
+            ({}, {'limit': 'Xyz'}),
+            ({}, {'limit': '?$#'}),
+            ({'max_limit': 20}, {'limit': '21'}),
+    ))
+    def test_options_handled__invalid(self, options, query):
+        mock_request = MockRequest(query=query)
+
+        @decorators.WrappedListOperation(**options)
+        def my_func(*_):
+            pass
+
+        with pytest.raises(ValidationError):
+            my_func(mock_request, {})
 
     def test_returning_total_count(self):
         mock_request = MockRequest()
