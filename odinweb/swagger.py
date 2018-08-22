@@ -17,43 +17,52 @@ To enable add the :py:class:`SwaggerSpec` resource API into your API::
 import collections
 import os
 
-# Imported for typing support
-from typing import List, Dict, Any, Union, Tuple  # noqa
-
-from odin.fields.virtual import VirtualField
-from .data_structures import PathParam  # noqa
-
 from odin import fields
+from odin.fields.virtual import VirtualField
 from odin.utils import getmeta, lazy_property, force_tuple
 
 from . import doc
 from . import resources
 from ._compat import binary_type
-from .constants import HTTPStatus, Type
+from .constants import HTTPStatus, Type as SwaggerType
 from .containers import ResourceApi, CODECS
 from .data_structures import UrlPath, Param, HttpResponse, NoPath, DefaultResource
 from .decorators import Operation
 from .exceptions import HttpError
 from .utils import dict_filter
 
+# Imported for typing support
+from typing import List, Dict, Any, Union, Tuple, Type  # noqa
+from .data_structures import PathParam  # noqa
+
+try:
+    from odin.fields import future
+except ImportError:
+    future = None
+
 
 SWAGGER_SPEC_TYPE_MAPPING = [
-    (fields.IntegerField, Type.Long),
-    (fields.FloatField, Type.Float),
-    (fields.EmailField, Type.Email),
-    (fields.StringField, Type.String),
-    (fields.TimeField, Type.Time),
-    (fields.DateField, Type.Date),
-    (fields.DateTimeField, Type.DateTime),
-    (fields.BooleanField, Type.Boolean),
-]
+    (fields.IntegerField, SwaggerType.Long),
+    (fields.FloatField, SwaggerType.Float),
+    (fields.EmailField, SwaggerType.Email),
+    (fields.StringField, SwaggerType.String),
+    (fields.TimeField, SwaggerType.Time),
+    (fields.DateField, SwaggerType.Date),
+    (fields.DateTimeField, SwaggerType.DateTime),
+    (fields.BooleanField, SwaggerType.Boolean),
+]  # type: List[Tuple[Type[fields.Field], SwaggerType]]
 """
 Mapping of fields to Swagger types.
 """
 
+if future:
+    SWAGGER_SPEC_TYPE_MAPPING.append(
+        (future.EnumField, SwaggerType.String)
+    )
+
 
 def map_field_to_type(field):
-    # type: (Any) -> Type
+    # type: (Any) -> SwaggerType
     for field_type, type_ in SWAGGER_SPEC_TYPE_MAPPING:
         if isinstance(field, field_type):
             return type_

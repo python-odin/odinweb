@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import pytest
 
 from collections import defaultdict
+from odin.exceptions import ValidationError
 
 from odinweb import decorators
 from odinweb.constants import *
@@ -214,12 +215,6 @@ class TestListOperation(object):
         # Max limit
         ({'max_limit': 100}, {}, 0, 50),
         ({'max_limit': 100}, {'offset': 10, 'limit': 100}, 10, 100),
-        ({'max_limit': 100}, {'offset': 10, 'limit': 102}, 10, 100),
-        # Silly values?
-        ({}, {'offset': -1}, 0, 50),
-        ({}, {'limit': -1}, 0, 1),
-        ({}, {'limit': 0}, 0, 1),
-        ({}, {'offset': -1, 'limit': -1}, 0, 1),
     ))
     def test_options_handled(self, options, query, offset, limit):
         mock_request = MockRequest(query=query)
@@ -239,6 +234,31 @@ class TestListOperation(object):
         assert result['X-Page-Offset'] == str(offset)
         assert result['X-Page-Limit'] == str(limit)
         assert 'X-Total-Count' not in result.headers
+
+    @pytest.mark.parametrize('options, query, expected_errors', (
+        ({}, {'offset': ''}, 1),
+        ({}, {'offset': 'abc'}, 1),
+        ({}, {'offset': 'xyz'}, 1),
+        ({}, {'limit': ''}, 1),
+        ({}, {'limit': 'abc'}, 1),
+        ({}, {'limit': 'xyz'}, 1),
+        ({}, {'limit': '', 'offset': ''}, 2),
+        # Outside limits
+        ({}, {'offset': '-1'}, 1),
+        ({}, {'limit': '-1'}, 1),
+        ({'max_limit': 60}, {'limit': '61'}, 1),
+    ))
+    def test_bad_values(self, options, query, expected_errors):
+        mock_request = MockRequest(query=query)
+
+        @decorators.ListOperation(**options)
+        def my_func(request, **kwargs):
+            return [1, 2, 3]
+
+        with pytest.raises(ValidationError) as error:
+            my_func(mock_request, {'foo': 'bar'})
+
+        assert len(error.value.error_messages) == expected_errors
 
     def test_returning_total_count(self):
         mock_request = MockRequest()
