@@ -7,6 +7,9 @@ A collection of decorators for identifying the various types of route.
 """
 from __future__ import absolute_import
 
+import odin
+
+from odin.exceptions import ValidationError
 from odin.utils import force_tuple, lazy_property, getmeta
 
 from .constants import HTTPStatus, Method, Type
@@ -405,6 +408,16 @@ class ListOperation(Operation):
 
         super(ListOperation, self).__init__(*args, **kwargs)
 
+        # Add validation fields
+        self._query_fields = [
+            odin.IntegerField(name='offset', default=self.default_offset,
+                              null=False, min_value=0,
+                              use_default_if_not_provided=True),
+            odin.IntegerField(name='limit', default=self.default_limit,
+                              null=False, min_value=1, max_value=self.max_limit,
+                              use_default_if_not_provided=True),
+        ]
+
         # Apply documentation
         self.parameters.add(Param.query('offset', Type.Integer, "Offset to start listing from.",
                                         default=self.default_offset))
@@ -413,27 +426,27 @@ class ListOperation(Operation):
 
     def execute(self, request, *args, **path_args):
         # type: (BaseHttpRequest, *Any, **Any) -> Any
-        # Get paging args from query string
-        offset = int(request.GET.get('offset', self.default_offset))
-        if offset < 0:
-            offset = 0
-        path_args['offset'] = offset
 
-        max_limit = self.max_limit
-        limit = int(request.GET.get('limit', self.default_limit))
-        if limit < 1:
-            limit = 1
-        elif max_limit and limit > max_limit:
-            limit = max_limit
-        path_args['limit'] = limit
+        errors = {}
+        headers = {}
+
+        # Parse query strings
+        for field in self._query_fields:
+            value = request.GET.get(field.name, field.default)
+            try:
+                value = field.clean(value)
+            except ValidationError as ve:
+                errors[field.name] = ve.messages
+            else:
+                path_args[field.name] = value
+                headers['X-Page-{}'.format(field.name.title())] = str(value)
+
+        if errors:
+            raise ValidationError(errors)
 
         # Run base execute
         result = super(ListOperation, self).execute(request, *args, **path_args)
         if result is not None:
-            headers = {
-                'X-Page-Limit': str(limit),
-                'X-Page-Offset': str(offset),
-            }
             if isinstance(result, tuple) and len(result) == 2:
                 result, total_count = result
                 if total_count is not None:
