@@ -25,7 +25,7 @@ def parse_content_type(value):
 
 
 def resolve_content_type(type_resolvers, request):
-    # type: (Iterable[Callable((Any,), str), Any]) -> Optional[str]
+    # type: (Iterable[Callable[[Any], str]], Any) -> Optional[str]
     """
     Resolve content types from a request.
     """

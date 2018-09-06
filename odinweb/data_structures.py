@@ -295,7 +295,7 @@ class UrlPath(object):
         return cls(*nodes)
 
     def __init__(self, *nodes):
-        # type: (*Union(str, PathParam)) -> None
+        # type: (*Union[str, PathParam]) -> None
         self._nodes = nodes
 
     def __hash__(self):
@@ -482,7 +482,7 @@ class Param(object):
                    enum=enum, **options)
 
     def __init__(self, name, in_, type_=None, resource=None, description=None, **options):
-        # type: (str, In, Optional[Type], Optional(Resource), Optional(str), **Any) -> None
+        # type: (str, In, Optional[Type], Optional[Resource], Optional[str], **Any) -> None
         self.name = name
         self.in_ = in_
         self.type = type_
@@ -527,7 +527,7 @@ class Response(object):
     __slots__ = ('status', 'description', 'resource')
 
     def __init__(self, status, description=None, resource=DefaultResource):
-        # type: (HTTPStatus, str, Optional(Resource)) -> None
+        # type: (HTTPStatus, str, Optional[Resource]) -> None
         self.status = status
         self.description = description
         self.resource = resource
@@ -567,7 +567,7 @@ class DefaultResponse(Response):
     Default response object
     """
     def __init__(self, description, resource=DefaultResource):
-        # type: (str, Optional(Resource)) -> None
+        # type: (str, Optional[Resource]) -> None
         super(DefaultResponse, self).__init__('default', description, resource)
 
 

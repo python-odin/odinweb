@@ -75,11 +75,14 @@ class ResourceApiMeta(type):
                 if api_resource:
                     break
 
+        new_class = super_new(mcs, name, bases, attrs)
+
         # Get operations
         operations = []
         for obj in attrs.values():
             if isinstance(obj, Operation):
                 operations.append(obj)
+                obj.bind_to_instance(new_class)
 
         # Get routes from parent objects
         for parent in parents:
@@ -87,7 +90,6 @@ class ResourceApiMeta(type):
             if parent_ops:
                 operations.extend(parent_ops)
 
-        new_class = super_new(mcs, name, bases, attrs)
         setattr(new_class, '_operations', sorted(operations, key=lambda o: o.sort_key))
 
         return new_class
@@ -125,9 +127,6 @@ class ResourceApi(_compat.with_metaclass(ResourceApiMeta)):
 
         # Append APIs name to path prefix
         self.path_prefix += self.api_name
-
-        for operation in self._operations:
-            operation.bind_to_instance(self)
 
     def op_paths(self, path_base):
         # type: (Union[str, UrlPath]) -> Generator[Tuple[UrlPath, Operation]]
@@ -174,7 +173,7 @@ class ApiContainer(object):
             raise TypeError("Got an unexpected keyword argument(s) {}", options.keys())
 
     def operation(self, path, methods=Method.GET, resource=None, tags=None, summary=None, middleware=None):
-        # type: (UrlPath, Union(Method, Tuple[Method]), Type[Resource], Tags, str, list) -> Operation
+        # type: (UrlPath, Union[Method, Tuple[Method]], Type[Resource], Tags, str, list) -> Operation
         """
         :param path: A sub path that can be used as a action.
         :param methods: HTTP method(s) this function responses to.
@@ -274,7 +273,7 @@ class ApiInterfaceBase(ApiContainer):
             raise ValueError("Path prefix must be an absolute path (eg start with a '/')")
 
     def handle_500(self, request, exception):
-        # type: (BaseHttpRequest, BaseException)
+        # type: (BaseHttpRequest, BaseException) -> Resource
         """
         Handle an *un-handled* exception.
         """
